@@ -133,6 +133,21 @@ select:focus {
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
+.checkbox-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  align-self: end;
+  gap: 10px;
+}
+
+.checkbox-field input {
+  width: auto;
+}
+
+.checkbox-field span {
+  line-height: 1.4;
+}
+
 .input-section {
   margin-top: 22px;
   border: 1px solid var(--border);
@@ -250,7 +265,7 @@ table {
 }
 
 .input-table {
-  min-width: 520px;
+  min-width: 980px;
 }
 
 th,
@@ -266,7 +281,8 @@ td {
   padding: 10px;
 }
 
-.input-table input {
+.input-table input,
+.input-table select {
   min-width: 140px;
   border-radius: 12px;
   padding: 10px 12px;
