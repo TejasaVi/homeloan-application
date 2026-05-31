@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Home Loan EMI Calculator</title>
+    <title>Home Loan EMI & Amortization Calculator</title>
     <meta
       name="description"
-      content="A dependency-free home loan EMI calculator with amortization schedule and prepayment support."
+      content="Home loan EMI and amortization calculator with rate changes, extra payments, and under-construction disbursements."
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -14,51 +14,111 @@
     <main class="page-shell">
       <section class="hero" aria-labelledby="page-title">
         <div>
-          <p class="eyebrow">No build tools • No npm • Runs locally</p>
-          <h1 id="page-title">Home Loan EMI Calculator</h1>
+          <h1 id="page-title">Home Loan EMI & Amortization Calculator</h1>
           <p class="hero-copy">
-            Estimate monthly payments, total interest, payoff dates, and a year-by-year amortization
-            schedule directly in your browser.
+            Calculate EMI, interest, principal, remaining balance, rate changes, extra payments, and
+            under-construction loan disbursements in rupees.
           </p>
         </div>
-        <aside class="hero-card" aria-label="Quick start">
-          <strong>How to run</strong>
-          <span>Double-click <code>index.html</code> or serve this folder with any static file server.</span>
-        </aside>
       </section>
 
       <section class="calculator-grid">
         <form id="loan-form" class="panel form-panel">
           <div class="panel-heading">
             <h2>Loan details</h2>
-            <p>Change any value and select Calculate to refresh the numbers.</p>
+            <p>Enter the loan terms and select Calculate to refresh the amortization sheet.</p>
           </div>
 
           <div class="field-grid">
             <label>
-              Home price
-              <input id="home-price" type="number" min="0" step="1000" value="450000" />
+              Loan amount (₹)
+              <input id="loan-amount" type="number" min="0" step="1000" value="4500000" />
             </label>
             <label>
-              Down payment
-              <input id="down-payment" type="number" min="0" step="1000" value="90000" />
+              Borrowing interest rate (%)
+              <input id="interest-rate" type="number" min="0" step="0.01" value="8.5" />
             </label>
             <label>
-              Annual interest rate (%)
-              <input id="interest-rate" type="number" min="0" step="0.01" value="6.75" />
-            </label>
-            <label>
-              Loan term (years)
-              <input id="loan-term" type="number" min="1" step="1" value="30" />
-            </label>
-            <label>
-              Extra monthly payment
-              <input id="extra-payment" type="number" min="0" step="50" value="0" />
+              Loan duration (years)
+              <input id="loan-duration" type="number" min="1" step="1" value="20" />
             </label>
             <label>
               Start month
               <input id="start-month" type="month" />
             </label>
+            <label>
+              Property status
+              <select id="property-status">
+                <option value="ready">Ready to move-in</option>
+                <option value="construction">Under construction</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="disbursement-section" class="input-section" hidden>
+            <div class="section-title-row">
+              <div>
+                <h3>Disbursement plan</h3>
+                <p>Add each loan disbursement month and amount. The total must match the loan amount.</p>
+              </div>
+              <button type="button" class="secondary small-button" id="add-disbursement-button">Add disbursement</button>
+            </div>
+            <div class="table-wrap compact-wrap">
+              <table class="input-table">
+                <thead>
+                  <tr>
+                    <th>Month no.</th>
+                    <th>Amount (₹)</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="disbursement-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="input-section">
+            <div class="section-title-row">
+              <div>
+                <h3>Interest rate changes</h3>
+                <p>Optional rate changes during the loan tenure. Month 1 uses the borrowing rate above.</p>
+              </div>
+              <button type="button" class="secondary small-button" id="add-rate-button">Add rate change</button>
+            </div>
+            <div class="table-wrap compact-wrap">
+              <table class="input-table">
+                <thead>
+                  <tr>
+                    <th>From month no.</th>
+                    <th>New rate (%)</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="rate-change-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="input-section">
+            <div class="section-title-row">
+              <div>
+                <h3>Extra payments</h3>
+                <p>Optional one-time extra principal payments for specific months.</p>
+              </div>
+              <button type="button" class="secondary small-button" id="add-extra-button">Add extra payment</button>
+            </div>
+            <div class="table-wrap compact-wrap">
+              <table class="input-table">
+                <thead>
+                  <tr>
+                    <th>Month no.</th>
+                    <th>Amount (₹)</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="extra-payment-body"></tbody>
+              </table>
+            </div>
           </div>
 
           <div class="form-actions">
@@ -80,8 +140,8 @@
       <section class="panel schedule-panel" aria-labelledby="schedule-title">
         <div class="panel-heading schedule-heading">
           <div>
-            <h2 id="schedule-title">Amortization schedule</h2>
-            <p>Yearly totals are grouped from the month-by-month repayment plan.</p>
+            <h2 id="schedule-title">Amortization sheet</h2>
+            <p>Month-by-month EMI, interest component, principal component, extra payment, and balance.</p>
           </div>
           <button type="button" class="secondary" id="download-button">Download CSV</button>
         </div>
@@ -89,11 +149,16 @@
           <table>
             <thead>
               <tr>
-                <th>Year</th>
-                <th>Principal paid</th>
-                <th>Interest paid</th>
+                <th>Month</th>
+                <th>Status</th>
+                <th>Rate</th>
+                <th>Disbursed</th>
+                <th>Opening principal</th>
+                <th>EMI / Pre-EMI</th>
+                <th>Interest</th>
+                <th>Principal</th>
                 <th>Extra paid</th>
-                <th>Ending balance</th>
+                <th>Remaining principal</th>
               </tr>
             </thead>
             <tbody id="schedule-body"></tbody>
