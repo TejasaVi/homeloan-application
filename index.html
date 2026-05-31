@@ -1,12 +1,107 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Home Loan Amortization</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Home Loan EMI Calculator</title>
+    <meta
+      name="description"
+      content="A dependency-free home loan EMI calculator with amortization schedule and prepayment support."
+    />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <main class="page-shell">
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">No build tools • No npm • Runs locally</p>
+          <h1 id="page-title">Home Loan EMI Calculator</h1>
+          <p class="hero-copy">
+            Estimate monthly payments, total interest, payoff dates, and a year-by-year amortization
+            schedule directly in your browser.
+          </p>
+        </div>
+        <aside class="hero-card" aria-label="Quick start">
+          <strong>How to run</strong>
+          <span>Double-click <code>index.html</code> or serve this folder with any static file server.</span>
+        </aside>
+      </section>
+
+      <section class="calculator-grid">
+        <form id="loan-form" class="panel form-panel">
+          <div class="panel-heading">
+            <h2>Loan details</h2>
+            <p>Change any value and select Calculate to refresh the numbers.</p>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              Home price
+              <input id="home-price" type="number" min="0" step="1000" value="450000" />
+            </label>
+            <label>
+              Down payment
+              <input id="down-payment" type="number" min="0" step="1000" value="90000" />
+            </label>
+            <label>
+              Annual interest rate (%)
+              <input id="interest-rate" type="number" min="0" step="0.01" value="6.75" />
+            </label>
+            <label>
+              Loan term (years)
+              <input id="loan-term" type="number" min="1" step="1" value="30" />
+            </label>
+            <label>
+              Extra monthly payment
+              <input id="extra-payment" type="number" min="0" step="50" value="0" />
+            </label>
+            <label>
+              Start month
+              <input id="start-month" type="month" />
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit">Calculate</button>
+            <button type="button" class="secondary" id="reset-button">Reset</button>
+          </div>
+          <p id="form-error" class="error-message" role="alert" hidden></p>
+        </form>
+
+        <section class="panel results-panel" aria-labelledby="summary-title">
+          <div class="panel-heading">
+            <h2 id="summary-title">Loan summary</h2>
+            <p>Based on the values entered on the left.</p>
+          </div>
+          <div class="summary-grid" id="summary-grid"></div>
+        </section>
+      </section>
+
+      <section class="panel schedule-panel" aria-labelledby="schedule-title">
+        <div class="panel-heading schedule-heading">
+          <div>
+            <h2 id="schedule-title">Amortization schedule</h2>
+            <p>Yearly totals are grouped from the month-by-month repayment plan.</p>
+          </div>
+          <button type="button" class="secondary" id="download-button">Download CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Principal paid</th>
+                <th>Interest paid</th>
+                <th>Extra paid</th>
+                <th>Ending balance</th>
+              </tr>
+            </thead>
+            <tbody id="schedule-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
   </body>
 </html>
