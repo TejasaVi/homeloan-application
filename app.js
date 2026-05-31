@@ -58,11 +58,9 @@ const dateFormatter = new Intl.DateTimeFormat("en-IN", {
 
 function getElement(id) {
   const element = document.getElementById(id);
-
   if (!element) {
     throw new Error(`Missing required page element: #${id}`);
   }
-
   return element;
 }
 
@@ -125,36 +123,19 @@ function calculateMonthlyPayment(principal, annualRate, months) {
   if (principal <= 0 || months <= 0) {
     return 0;
   }
-
   const monthlyRate = annualRate / 100 / 12;
-
   if (monthlyRate === 0) {
     return principal / months;
   }
-
   return (principal * monthlyRate * (1 + monthlyRate) ** months) / ((1 + monthlyRate) ** months - 1);
 }
 
 function applyInputOptions(input, options = {}) {
-  if (options.min !== undefined) {
-    input.min = options.min;
-  }
-
-  if (options.max !== undefined) {
-    input.max = options.max;
-  }
-
-  if (options.step !== undefined) {
-    input.step = options.step;
-  }
-
-  if (options.inputMode) {
-    input.inputMode = options.inputMode;
-  }
-
-  if (options.placeholder) {
-    input.placeholder = options.placeholder;
-  }
+  if (options.min !== undefined) input.min = options.min;
+  if (options.max !== undefined) input.max = options.max;
+  if (options.step !== undefined) input.step = options.step;
+  if (options.inputMode) input.inputMode = options.inputMode;
+  if (options.placeholder) input.placeholder = options.placeholder;
 }
 
 function createInputCell(type, className, value, options = {}) {
@@ -172,14 +153,12 @@ function createSelectCell(className, value, options) {
   const cell = document.createElement("td");
   const select = document.createElement("select");
   select.className = className;
-
   options.forEach(({ value: optionValue, label }) => {
     const option = document.createElement("option");
     option.value = optionValue;
     option.textContent = label;
     select.append(option);
   });
-
   select.value = value;
   cell.append(select);
   return cell;
@@ -204,9 +183,7 @@ function addTableRow(body, rowClass, values) {
     row.append(createInputCell("number", "rate-input", values.rate, { min: "0", step: "0.01" }));
   } else {
     row.append(
-      createInputCell("text", "amount-input", values.amount, {
-        inputMode: "numeric",
-      }),
+      createInputCell("text", "amount-input", values.amount, { inputMode: "numeric" }),
     );
 
     if (rowClass === "disbursement-row") {
@@ -338,7 +315,6 @@ function validateMonthRows(rows, label, maximumMonths) {
       return `${label} month must be between 1 and ${maximumMonths}.`;
     }
   }
-
   return "";
 }
 
@@ -348,7 +324,6 @@ function validateWholeNumberRows(rows, valueKey, label) {
       return `${label} amount must be a whole number.`;
     }
   }
-
   return "";
 }
 
@@ -358,7 +333,6 @@ function validateDisbursementSchedules(rows) {
       return "Disbursement day must be between 1 and 31.";
     }
   }
-
   return "";
 }
 
@@ -367,16 +341,13 @@ function validateExtraPaymentSchedules(rows, maximumMonths) {
     if (row.day < 1 || row.day > 31) {
       return "Extra payment day must be between 1 and 31.";
     }
-
     if (row.frequency === "range" && (row.endMonth < row.month || row.endMonth > maximumMonths)) {
       return "Extra payment end month must be within the loan duration and not before the start month.";
     }
-
     if (row.frequency === "count" && row.count < 1) {
       return "Extra payment month count must be at least 1.";
     }
   }
-
   return "";
 }
 
@@ -386,66 +357,48 @@ function validateInputs(values) {
   if (!isWholeNumberInput(values.loanAmountInput)) {
     return "Loan amount must be a whole number.";
   }
-
   if (values.interestRate < 0) {
     return "Borrowing interest rate cannot be negative.";
   }
-
   if (values.loanDuration < 1) {
     return "Loan duration must be at least one year.";
   }
-
   if (values.emiDay < 1 || values.emiDay > 31) {
     return "EMI day must be between 1 and 31.";
   }
-
   if (!values.startMonth) {
     return "Start month is required.";
   }
 
   const rateChangeError = validateMonthRows(values.rateChanges, "Rate change", maximumMonths);
-  if (rateChangeError) {
-    return rateChangeError;
-  }
+  if (rateChangeError) return rateChangeError;
 
   const extraPaymentError = validateMonthRows(values.extraPayments, "Extra payment", maximumMonths);
-  if (extraPaymentError) {
-    return extraPaymentError;
-  }
+  if (extraPaymentError) return extraPaymentError;
 
   if (values.rateChanges.some((row) => row.rate < 0)) {
     return "Rate change percentage cannot be negative.";
   }
 
   const extraPaymentAmountError = validateWholeNumberRows(values.extraPayments, "amount", "Extra payment");
-  if (extraPaymentAmountError) {
-    return extraPaymentAmountError;
-  }
+  if (extraPaymentAmountError) return extraPaymentAmountError;
 
   const extraPaymentScheduleError = validateExtraPaymentSchedules(values.extraPayments, maximumMonths);
-  if (extraPaymentScheduleError) {
-    return extraPaymentScheduleError;
-  }
+  if (extraPaymentScheduleError) return extraPaymentScheduleError;
 
   if (values.propertyStatus === "construction") {
     const disbursementError = validateMonthRows(values.disbursements, "Disbursement", maximumMonths);
-    if (disbursementError) {
-      return disbursementError;
-    }
+    if (disbursementError) return disbursementError;
 
     if (!values.disbursements.length) {
       return "Add at least one disbursement for an under-construction property.";
     }
 
     const disbursementAmountError = validateWholeNumberRows(values.disbursements, "amount", "Disbursement");
-    if (disbursementAmountError) {
-      return disbursementAmountError;
-    }
+    if (disbursementAmountError) return disbursementAmountError;
 
     const disbursementScheduleError = validateDisbursementSchedules(values.disbursements);
-    if (disbursementScheduleError) {
-      return disbursementScheduleError;
-    }
+    if (disbursementScheduleError) return disbursementScheduleError;
 
     if (values.moratorium && (values.possessionMonth < 1 || values.possessionMonth > maximumMonths)) {
       return `Possession month must be between 1 and ${maximumMonths}.`;
@@ -460,7 +413,6 @@ function expandExtraPayments(rows, maximumMonths, startMonth) {
 
   rows.forEach((row) => {
     let finalMonth = row.month;
-
     if (row.frequency === "monthly") {
       finalMonth = maximumMonths;
     } else if (row.frequency === "range") {
@@ -517,6 +469,16 @@ function buildSchedule(values) {
     ? disbursements[disbursements.length - 1].date
     : getLoanMonthDate(values.startMonth, 0, values.emiDay);
   const moratoriumEndMonth = isConstruction && values.moratorium ? values.possessionMonth : 1;
+
+  // --- FIX: compute a fixed EMI once per rate segment ---
+  // We track the "current EMI" and only recompute it when the interest rate changes.
+  // The EMI is always based on the ORIGINAL full loan amount and ORIGINAL full tenure,
+  // so it stays constant within each rate segment.
+  let currentRate = values.interestRate;
+  let currentEmi = calculateMonthlyPayment(values.loanAmount, currentRate, maximumMonths);
+  // Build a quick lookup: which months trigger a rate change?
+  const rateChangeMonths = new Set(sortedRateChanges.map((c) => c.month));
+
   const rows = [];
   let balance = isConstruction ? 0 : values.loanAmount;
   let totalInterest = 0;
@@ -526,19 +488,37 @@ function buildSchedule(values) {
   let moratoriumInterest = 0;
   let firstEmi = 0;
 
-  for (let monthNumber = 1; monthNumber <= maximumMonths && (balance > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 2, values.emiDay) < finalDisbursementDate); monthNumber += 1) {
+  for (
+    let monthNumber = 1;
+    monthNumber <= maximumMonths &&
+    (balance > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 2, values.emiDay) < finalDisbursementDate);
+    monthNumber += 1
+  ) {
     const date = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
     const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 2, values.emiDay);
     const rate = getRateForMonth(values.interestRate, sortedRateChanges, monthNumber);
-    const openingBalance = balance;
 
+    // Recompute fixed EMI only when the rate has just changed this month
+    if (rateChangeMonths.has(monthNumber)) {
+      const newRate = sortedRateChanges.find((c) => c.month === monthNumber).rate;
+      if (newRate !== currentRate) {
+        currentRate = newRate;
+        // Rebase EMI on current outstanding balance and remaining months at the new rate
+        const remainingMonths = maximumMonths - monthNumber + 1;
+        currentEmi = calculateMonthlyPayment(balance, currentRate, remainingMonths);
+      }
+    }
+
+    const openingBalance = balance;
     const isMoratorium = isConstruction && values.moratorium && monthNumber < moratoriumEndMonth;
+
     const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, date);
     const periodPayments = getPaymentsForPeriod(extraPayments, periodStart, date);
     const periodEvents = [
-      ...periodDisbursements.map((disbursement) => ({ ...disbursement, type: "disbursement" })),
-      ...periodPayments.map((payment) => ({ ...payment, type: "prepayment" })),
+      ...periodDisbursements.map((d) => ({ ...d, type: "disbursement" })),
+      ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
     ].sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
+
     let interest = 0;
     let extraPaid = 0;
     let disbursed = 0;
@@ -564,19 +544,30 @@ function buildSchedule(values) {
     interest += calculateDailyInterest(interestBalance, rate, getDaysBetween(lastInterestDate, date));
     balance = interestBalance;
 
-    let emi = interest;
+    let emi = 0;
     let principalComponent = 0;
 
-    if (!isMoratorium) {
-      const remainingMonths = maximumMonths - monthNumber + 1;
-      const paymentBase = isConstruction && totalDisbursed < values.loanAmount ? values.loanAmount : balance;
-      emi = calculateMonthlyPayment(paymentBase, rate, remainingMonths);
-      principalComponent = Math.min(Math.max(emi - interest, 0), balance);
+    if (isMoratorium) {
+      // Moratorium: show only the accrued interest, no principal reduction
+      emi = interest;
+      moratoriumInterest += interest;
+    } else {
+      // Normal EMI month: use the fixed EMI, derive principal from it
+      emi = currentEmi;
+
+      // On the very last month(s), emi might exceed the remaining balance + interest;
+      // clamp so we never overpay.
+      const totalOwed = balance + interest;
+      if (emi > totalOwed) {
+        emi = totalOwed;
+      }
+
+      principalComponent = Math.max(emi - interest, 0);
+      principalComponent = Math.min(principalComponent, balance);
+
       if (!firstEmi && emi > 0) {
         firstEmi = emi;
       }
-    } else {
-      moratoriumInterest += interest;
     }
 
     balance = Math.max(balance - principalComponent, 0);
@@ -673,9 +664,7 @@ function calculateAndRender() {
 }
 
 function downloadCsv() {
-  if (!latestSchedule.length) {
-    return;
-  }
+  if (!latestSchedule.length) return;
 
   const header = [
     "EMI date",
@@ -724,10 +713,7 @@ function showStartupError(error) {
 }
 
 function handleRemoveRow(event) {
-  if (!event.target.classList.contains("remove-row-button")) {
-    return;
-  }
-
+  if (!event.target.classList.contains("remove-row-button")) return;
   event.target.closest("tr").remove();
   calculateAndRender();
 }
