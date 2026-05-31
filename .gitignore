@@ -1,0 +1,11 @@
+# Local/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependency folders should not be committed if created accidentally
+node_modules/
+
+# Generated exports
+*.csv
