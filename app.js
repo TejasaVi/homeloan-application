@@ -6,15 +6,39 @@ const DEFAULTS = {
   extraPayment: 0,
 };
 
-const form = document.querySelector("#loan-form");
-const resetButton = document.querySelector("#reset-button");
-const downloadButton = document.querySelector("#download-button");
-const summaryGrid = document.querySelector("#summary-grid");
-const scheduleBody = document.querySelector("#schedule-body");
-const errorMessage = document.querySelector("#form-error");
-const startMonthInput = document.querySelector("#start-month");
+const elementIds = [
+  "loan-form",
+  "reset-button",
+  "download-button",
+  "summary-grid",
+  "schedule-body",
+  "form-error",
+  "home-price",
+  "down-payment",
+  "interest-rate",
+  "loan-term",
+  "extra-payment",
+  "start-month",
+];
 
+const elements = {};
 let latestSchedule = [];
+
+function getElement(id) {
+  const element = document.getElementById(id);
+
+  if (!element) {
+    throw new Error(`Missing required page element: #${id}`);
+  }
+
+  return element;
+}
+
+function cacheElements() {
+  elementIds.forEach((id) => {
+    elements[id] = getElement(id);
+  });
+}
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -30,11 +54,11 @@ const monthFormatter = new Intl.DateTimeFormat("en-US", {
 function setDefaultStartMonth() {
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, "0");
-  startMonthInput.value = `${today.getFullYear()}-${month}`;
+  elements["start-month"].value = `${today.getFullYear()}-${month}`;
 }
 
 function readNumber(id) {
-  return Number(document.querySelector(`#${id}`).value || 0);
+  return Number(elements[id].value || 0);
 }
 
 function readFormValues() {
@@ -44,7 +68,7 @@ function readFormValues() {
     interestRate: readNumber("interest-rate"),
     loanTerm: readNumber("loan-term"),
     extraPayment: readNumber("extra-payment"),
-    startMonth: startMonthInput.value,
+    startMonth: elements["start-month"].value,
   };
 }
 
@@ -168,14 +192,14 @@ function renderSummary(result) {
     ["Months saved", `${Math.max(result.monthsSaved, 0)} months`],
   ];
 
-  summaryGrid.innerHTML = metrics
+  elements["summary-grid"].innerHTML = metrics
     .map(([label, value]) => `<article class="metric-card"><span>${label}</span><strong>${value}</strong></article>`)
     .join("");
 }
 
 function renderSchedule(rows) {
   latestSchedule = rows;
-  scheduleBody.innerHTML = rows
+  elements["schedule-body"].innerHTML = rows
     .map(
       (row) => `
         <tr>
@@ -191,8 +215,8 @@ function renderSchedule(rows) {
 }
 
 function showError(message) {
-  errorMessage.textContent = message;
-  errorMessage.hidden = !message;
+  elements["form-error"].textContent = message;
+  elements["form-error"].hidden = !message;
 }
 
 function calculateAndRender() {
@@ -243,13 +267,39 @@ function downloadCsv() {
   URL.revokeObjectURL(url);
 }
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  calculateAndRender();
-});
+function showStartupError(error) {
+  const message = document.createElement("div");
+  message.className = "startup-error";
+  message.setAttribute("role", "alert");
+  message.innerHTML = `
+    <strong>The calculator could not start.</strong>
+    <span>Refresh the page, make sure you are serving the project folder, and check the browser console for details.</span>
+  `;
+  document.body.prepend(message);
+  console.error(error);
+}
 
-resetButton.addEventListener("click", resetForm);
-downloadButton.addEventListener("click", downloadCsv);
+function initializeCalculator() {
+  try {
+    cacheElements();
 
-setDefaultStartMonth();
-calculateAndRender();
+    elements["loan-form"].addEventListener("submit", (event) => {
+      event.preventDefault();
+      calculateAndRender();
+    });
+
+    elements["reset-button"].addEventListener("click", resetForm);
+    elements["download-button"].addEventListener("click", downloadCsv);
+
+    setDefaultStartMonth();
+    calculateAndRender();
+  } catch (error) {
+    showStartupError(error);
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeCalculator);
+} else {
+  initializeCalculator();
+}

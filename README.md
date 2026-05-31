@@ -25,6 +25,21 @@ Then open:
 http://localhost:8000
 ```
 
+## Troubleshooting a blank page
+
+If `http://localhost:8000` opens to a blank page, the most common cause is starting the
+Python server from a different directory. Stop the server with <kbd>Ctrl</kbd> + <kbd>C</kbd>,
+change into this project folder, and start it again:
+
+```powershell
+cd path\to\homeloan-application
+python -m http.server 8000
+```
+
+Then refresh `http://localhost:8000/index.html`. You should see the calculator title and the
+loan form. If the page still does not load, open the browser developer console and look for an
+error message from `app.js`.
+
 ## Features
 
 - Calculates home loan principal from home price and down payment.
