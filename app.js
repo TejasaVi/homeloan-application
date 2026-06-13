@@ -2,14 +2,14 @@ const DEFAULTS = {
   loanAmount: 13000000,
   interestRate: 7.55,
   loanDuration: 20,
-  startMonth: "2026-06",
+  startMonth: "2026-05",
   emiDay: 1,
   propertyStatus: "construction",
   moratorium: false,
   possessionMonth: 1,
-  disbursements: [{ month: 1, amount: 2479989, day: 1 }],
+  disbursements: [{ month: 1, amount: 2479989, day: 31 }],
   rateChanges: [],
-  extraPayments: [{ month: 2, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 }],
+  extraPayments: [{ month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 }],
 };
 
 const elementIds = [
@@ -110,8 +110,21 @@ function getDaysBetween(startDate, endDate) {
   return Math.max(Math.round((endDate - startDate) / 86400000), 0);
 }
 
+function addDays(date, daysToAdd) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + daysToAdd);
+  return nextDate;
+}
+
 function calculateDailyInterest(principal, annualRate, days) {
   return principal * (annualRate / 100) * (days / 365);
+}
+
+function calculateInterestThroughDate(principal, annualRate, startDate, paymentDate) {
+  if (principal <= 0 || paymentDate < startDate) {
+    return 0;
+  }
+  return calculateDailyInterest(principal, annualRate, getDaysBetween(startDate, paymentDate) + 1);
 }
 
 function calculateMonthlyPayment(principal, annualRate, months) {
@@ -518,25 +531,25 @@ function buildSchedule(values) {
     let extraPaid = 0;
     let disbursed = 0;
     let interestBalance = balance;
-    let lastInterestDate = periodStart;
+    let lastInterestDate = addDays(periodStart, 1);
 
     periodEvents.forEach((event) => {
-      interest += calculateDailyInterest(interestBalance, rate, getDaysBetween(lastInterestDate, event.date));
-
       if (event.type === "disbursement") {
+        interest += calculateDailyInterest(interestBalance, rate, getDaysBetween(lastInterestDate, event.date));
         interestBalance += event.amount;
         disbursed += event.amount;
         totalDisbursed += event.amount;
+        lastInterestDate = event.date;
       } else {
+        interest += calculateInterestThroughDate(interestBalance, rate, lastInterestDate, event.date);
         const paymentAmount = Math.min(event.amount, interestBalance);
         interestBalance = Math.max(interestBalance - paymentAmount, 0);
         extraPaid += paymentAmount;
+        lastInterestDate = addDays(event.date, 1);
       }
-
-      lastInterestDate = event.date;
     });
 
-    interest += calculateDailyInterest(interestBalance, rate, getDaysBetween(lastInterestDate, date));
+    interest += calculateInterestThroughDate(interestBalance, rate, lastInterestDate, date);
     balance = interestBalance;
 
     let emi = 0;
