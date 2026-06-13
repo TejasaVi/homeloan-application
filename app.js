@@ -1,18 +1,15 @@
 const DEFAULTS = {
-  loanAmount: 4500000,
-  interestRate: 8.5,
+  loanAmount: 13000000,
+  interestRate: 7.55,
   loanDuration: 20,
-  emiDay: 5,
-  propertyStatus: "ready",
+  startMonth: "2026-06",
+  emiDay: 1,
+  propertyStatus: "construction",
   moratorium: false,
-  possessionMonth: 13,
-  disbursements: [
-    { month: 1, amount: 1500000, day: 1 },
-    { month: 7, amount: 1500000, day: 1 },
-    { month: 13, amount: 1500000, day: 1 },
-  ],
-  rateChanges: [{ month: 61, rate: 9.25 }],
-  extraPayments: [{ month: 24, amount: 100000, frequency: "once", endMonth: "", count: "", day: 15 }],
+  possessionMonth: 1,
+  disbursements: [{ month: 1, amount: 2479989, day: 1 }],
+  rateChanges: [],
+  extraPayments: [{ month: 2, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 }],
 };
 
 const elementIds = [
@@ -71,9 +68,7 @@ function cacheElements() {
 }
 
 function setDefaultStartMonth() {
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  elements["start-month"].value = `${today.getFullYear()}-${month}`;
+  elements["start-month"].value = DEFAULTS.startMonth;
 }
 
 function parseNumberInput(value) {
