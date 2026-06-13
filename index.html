@@ -32,11 +32,11 @@
           <div class="field-grid">
             <label>
               Loan amount (₹)
-              <input id="loan-amount" type="text" inputmode="numeric" value="4500000" />
+              <input id="loan-amount" type="text" inputmode="numeric" value="13000000" />
             </label>
             <label>
               Borrowing interest rate (%)
-              <input id="interest-rate" type="number" min="0" step="0.01" value="8.5" />
+              <input id="interest-rate" type="number" min="0" step="0.01" value="7.55" />
             </label>
             <label>
               Loan duration (years)
@@ -44,17 +44,17 @@
             </label>
             <label>
               Start month
-              <input id="start-month" type="month" />
+              <input id="start-month" type="month" value="2026-06" />
             </label>
             <label>
               EMI day of month
-              <input id="emi-day" type="number" min="1" max="31" step="1" value="5" />
+              <input id="emi-day" type="number" min="1" max="31" step="1" value="1" />
             </label>
             <label>
               Property status
               <select id="property-status">
                 <option value="ready">Ready to move-in</option>
-                <option value="construction">Under construction</option>
+                <option value="construction" selected>Under construction</option>
               </select>
             </label>
             <label id="moratorium-field" class="checkbox-field" hidden>
@@ -63,7 +63,7 @@
             </label>
             <label id="possession-month-field" hidden>
               Possession / EMI start month no.
-              <input id="possession-month" type="number" min="1" step="1" value="13" />
+              <input id="possession-month" type="number" min="1" step="1" value="1" />
             </label>
           </div>
 
