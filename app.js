@@ -268,13 +268,8 @@ function syncDisbursementBankContributions(values) {
     .sort((a, b) => a.month - b.month || a.day - b.day || a.index - b.index)
     .forEach((disbursement) => {
       const disbursementAmount = getDisbursementTotalAmount(values.agreementValue, disbursement.percentage || 0);
-      const hasBankContribution = disbursement.bankContributionInput.trim() !== "";
-      const bankContribution = hasBankContribution
-        ? disbursement.bankContribution
-        : Math.min(disbursementAmount, remainingLoanAmount);
-      const ownContribution = hasBankContribution
-        ? disbursement.ownContribution
-        : Math.max(disbursementAmount - bankContribution, 0);
+      const bankContribution = Math.min(disbursementAmount, remainingLoanAmount);
+      const ownContribution = Math.max(disbursementAmount - bankContribution, 0);
 
       remainingLoanAmount = Math.max(remainingLoanAmount - bankContribution, 0);
       calculatedContributions.set(disbursement.index, { bankContribution, ownContribution });
@@ -553,6 +548,15 @@ function validateInputs(values) {
     const totalBankDisbursementAmount = values.disbursements.reduce((total, row) => total + row.bankContribution, 0);
     if (totalBankDisbursementAmount > values.loanAmount) {
       return "Total bank contribution cannot be greater than the loan amount.";
+    }
+
+    const totalContributionAmount = values.disbursements.reduce(
+      (total, row) => total + row.bankContribution + row.ownContribution,
+      0,
+    );
+    const maximumContributionAmount = getDisbursementTotalAmount(values.agreementValue, 100);
+    if (totalContributionAmount > maximumContributionAmount) {
+      return `Total bank and own contribution cannot be greater than 105% of the agreement value (${formatCurrency(maximumContributionAmount)}).`;
     }
 
     if (values.moratorium && (values.possessionMonth < 1 || values.possessionMonth > maximumMonths)) {
