@@ -564,13 +564,9 @@ function validateInputs(values) {
       return "Total bank contribution cannot be greater than the loan amount.";
     }
 
-    const totalContributionAmount = values.disbursements.reduce(
-      (total, row) => total + row.bankContribution + row.ownContribution,
-      0,
-    );
-    const maximumContributionAmount = getDisbursementTotalAmount(values.agreementValue, 100);
-    if (roundCurrencyAmount(totalContributionAmount) > maximumContributionAmount) {
-      return `Total bank and own contribution cannot be greater than 105% of the agreement value (${formatCurrency(maximumContributionAmount)}).`;
+    const totalDisbursementPercentage = values.disbursements.reduce((total, row) => total + row.percentage, 0);
+    if (totalDisbursementPercentage > 100.000001) {
+      return `Total disbursement percentage cannot be greater than 100% of the agreement value (currently ${formatPercent(totalDisbursementPercentage)}).`;
     }
 
     if (values.moratorium && (values.possessionMonth < 1 || values.possessionMonth > maximumMonths)) {
