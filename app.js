@@ -166,6 +166,7 @@ function applyInputOptions(input, options = {}) {
   if (options.step !== undefined) input.step = options.step;
   if (options.inputMode) input.inputMode = options.inputMode;
   if (options.placeholder) input.placeholder = options.placeholder;
+  if (options.readOnly !== undefined) input.readOnly = options.readOnly;
 }
 
 function createInputCell(type, className, value, options = {}) {
@@ -224,7 +225,7 @@ function addTableRow(body, rowClass, values) {
       row.append(createTextCell("base-amount-cell"));
       row.append(createTextCell("gst-amount-cell"));
       row.append(createTextCell("derived-amount-cell"));
-      row.append(createInputCell("text", "bank-contribution-input", values.bankContribution ?? "", { inputMode: "numeric", placeholder: "Bank paid" }));
+      row.append(createInputCell("text", "bank-contribution-input", values.bankContribution ?? "", { inputMode: "numeric", placeholder: "Bank paid", readOnly: true }));
       row.append(createInputCell("text", "own-contribution-input", values.ownContribution ?? 0, { inputMode: "numeric", placeholder: "Own paid" }));
       row.append(createInputCell("number", "day-input", values.day || "1", { min: "1", max: "31", step: "1" }));
     }
@@ -249,6 +250,23 @@ function addTableRow(body, rowClass, values) {
 
   row.append(createRemoveCell());
   body.append(row);
+}
+
+function syncDisbursementBankContributions(values) {
+  elements["disbursement-body"].querySelectorAll("tr").forEach((row, index) => {
+    const bankContributionInput = row.querySelector(".bank-contribution-input");
+    if (!bankContributionInput) return;
+
+    const disbursement = values.disbursements[index];
+    if (!disbursement) return;
+
+    const ownContributionInput = disbursement.ownContributionInput || "0";
+    if (!isWholeNumberInput(ownContributionInput || "0") || disbursement.ownContribution < 0) return;
+
+    const disbursementAmount = getDisbursementTotalAmount(values.agreementValue, disbursement.percentage || 0);
+    const bankContribution = Math.max(disbursementAmount - disbursement.ownContribution, 0);
+    bankContributionInput.value = String(bankContribution);
+  });
 }
 
 function renderDisbursementDerivedAmounts(values) {
@@ -776,7 +794,9 @@ function showError(message) {
 }
 
 function calculateAndRender() {
-  const values = readFormValues();
+  let values = readFormValues();
+  syncDisbursementBankContributions(values);
+  values = readFormValues();
   renderDisbursementDerivedAmounts(values);
   const validationError = validateInputs(values);
 
@@ -868,7 +888,7 @@ function initializeCalculator() {
     elements["reset-button"].addEventListener("click", resetForm);
     elements["download-button"].addEventListener("click", downloadCsv);
     elements["add-disbursement-button"].addEventListener("click", () => {
-      addTableRow(elements["disbursement-body"], "disbursement-row", { month: 1, percentage: 0, bankContribution: 0, ownContribution: 0, day: 1 });
+      addTableRow(elements["disbursement-body"], "disbursement-row", { month: 1, percentage: 0, bankContribution: "", ownContribution: 0, day: 1 });
     });
     elements["add-rate-button"].addEventListener("click", () => {
       addTableRow(elements["rate-change-body"], "rate-row", { month: 1, rate: elements["interest-rate"].value });
