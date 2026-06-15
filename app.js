@@ -93,8 +93,12 @@ function isWholeNumberInput(value) {
   return /^\d+$/.test(trimmedValue) && Number.isFinite(Number(trimmedValue));
 }
 
+function roundCurrencyAmount(amount) {
+  return Math.round(amount);
+}
+
 function formatCurrency(amount) {
-  return currencyFormatter.format(Math.round(amount));
+  return currencyFormatter.format(roundCurrencyAmount(amount));
 }
 
 function formatPercent(percent) {
@@ -565,7 +569,7 @@ function validateInputs(values) {
       0,
     );
     const maximumContributionAmount = getDisbursementTotalAmount(values.agreementValue, 100);
-    if (totalContributionAmount > maximumContributionAmount) {
+    if (roundCurrencyAmount(totalContributionAmount) > maximumContributionAmount) {
       return `Total bank and own contribution cannot be greater than 105% of the agreement value (${formatCurrency(maximumContributionAmount)}).`;
     }
 
