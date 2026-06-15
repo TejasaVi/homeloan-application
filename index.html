@@ -35,8 +35,12 @@
               <input id="agreement-value" type="text" inputmode="numeric" value="15378378" />
             </label>
             <label>
-              Loan amount (₹)
+              Loan amount opted (₹)
               <input id="loan-amount" type="text" inputmode="numeric" value="13000000" />
+            </label>
+            <label>
+              Bank eligibility / sanction cap (% of agreement value, default 90% + 5% GST)
+              <input id="eligibility-percentage" type="number" min="0" step="0.01" value="95" />
             </label>
             <label>
               Borrowing interest rate (%)
@@ -75,7 +79,7 @@
             <div class="section-title-row">
               <div>
                 <h3>Disbursement plan</h3>
-                <p>Add known past or present disbursement month, day, percentage of agreement value, and bank/own funding split. Each disbursement adds 5% GST.</p>
+                <p>Add known past or present disbursement month, day, percentage of agreement value, and bank/own funding split. Each disbursement adds 5% GST; bank funding is capped by the loan amount opted and any disbursement amount above the remaining loan is automatically added to own contribution.</p>
               </div>
               <button type="button" class="secondary small-button" id="add-disbursement-button">Add disbursement</button>
             </div>

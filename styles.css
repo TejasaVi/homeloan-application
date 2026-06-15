@@ -219,29 +219,31 @@ button.secondary:hover {
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .metric-card {
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 18px;
+  padding: 12px 14px;
 }
 
 .metric-card span {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .metric-card strong {
-  font-size: clamp(1.1rem, 2vw, 1.55rem);
-  letter-spacing: -0.04em;
+  display: block;
+  font-size: clamp(0.95rem, 1.45vw, 1.18rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
 }
 
 .schedule-panel {
