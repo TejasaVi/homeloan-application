@@ -268,8 +268,13 @@ function syncDisbursementBankContributions(values) {
     .sort((a, b) => a.month - b.month || a.day - b.day || a.index - b.index)
     .forEach((disbursement) => {
       const disbursementAmount = getDisbursementTotalAmount(values.agreementValue, disbursement.percentage || 0);
-      const bankContribution = Math.min(disbursementAmount, remainingLoanAmount);
-      const ownContribution = Math.max(disbursementAmount - bankContribution, 0);
+      const hasBankContribution = disbursement.bankContributionInput.trim() !== "";
+      const bankContribution = hasBankContribution
+        ? disbursement.bankContribution
+        : Math.min(disbursementAmount, remainingLoanAmount);
+      const ownContribution = hasBankContribution
+        ? disbursement.ownContribution
+        : Math.max(disbursementAmount - bankContribution, 0);
 
       remainingLoanAmount = Math.max(remainingLoanAmount - bankContribution, 0);
       calculatedContributions.set(disbursement.index, { bankContribution, ownContribution });
