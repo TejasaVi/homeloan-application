@@ -9,13 +9,16 @@ const DEFAULTS = {
   propertyStatus: "construction",
   moratorium: false,
   possessionMonth: 1,
-  disbursements: [30, 15, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5].map((percentage, index) => ({
-    month: index + 1,
-    percentage,
-    bankContribution: "",
-    ownContribution: 0,
-    day: 1,
-  })),
+  disbursements: [
+    { month: 1, percentage: 30, bankContribution: 2479989, ownContribution: 2364200, day: 31 },
+    ...[15, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5].map((percentage, index) => ({
+      month: index + 2,
+      percentage,
+      bankContribution: "",
+      ownContribution: 0,
+      day: 1,
+    })),
+  ],
   rateChanges: [],
   extraPayments: [{ month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 }],
 };
