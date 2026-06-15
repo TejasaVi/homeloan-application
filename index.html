@@ -31,6 +31,10 @@
 
           <div class="field-grid">
             <label>
+              Agreement value (₹)
+              <input id="agreement-value" type="text" inputmode="numeric" value="16533260" />
+            </label>
+            <label>
               Loan amount (₹)
               <input id="loan-amount" type="text" inputmode="numeric" value="13000000" />
             </label>
@@ -71,7 +75,7 @@
             <div class="section-title-row">
               <div>
                 <h3>Disbursement plan</h3>
-                <p>Add known past or present disbursement month, day, and whole-number amount entries.</p>
+                <p>Add known past or present disbursement month, day, and percentage of agreement value.</p>
               </div>
               <button type="button" class="secondary small-button" id="add-disbursement-button">Add disbursement</button>
             </div>
@@ -80,7 +84,8 @@
                 <thead>
                   <tr>
                     <th>Month no.</th>
-                    <th>Amount (₹)</th>
+                    <th>% of agreement value</th>
+                    <th>Disbursement value</th>
                     <th>Disbursement day</th>
                     <th>Action</th>
                   </tr>
