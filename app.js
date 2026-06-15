@@ -1,6 +1,7 @@
 const DEFAULTS = {
   agreementValue: 15378378,
   loanAmount: 13000000,
+  eligibilityPercentage: 95,
   interestRate: 7.55,
   loanDuration: 20,
   startMonth: "2026-05",
@@ -22,6 +23,7 @@ const elementIds = [
   "form-error",
   "agreement-value",
   "loan-amount",
+  "eligibility-percentage",
   "interest-rate",
   "loan-duration",
   "emi-day",
@@ -109,6 +111,10 @@ function getDisbursementTotalAmount(agreementValue, percentage) {
 
 function getDisbursementBaseAmount(agreementValue, percentage) {
   return (agreementValue * percentage) / 100;
+}
+
+function getEligibleLoanAmount(agreementValue, eligibilityPercentage) {
+  return Math.round((agreementValue * eligibilityPercentage) / 100);
 }
 
 function addMonths(startMonth, monthsToAdd) {
@@ -226,7 +232,7 @@ function addTableRow(body, rowClass, values) {
       row.append(createTextCell("gst-amount-cell"));
       row.append(createTextCell("derived-amount-cell"));
       row.append(createInputCell("text", "bank-contribution-input", values.bankContribution ?? "", { inputMode: "numeric", placeholder: "Bank paid", readOnly: true }));
-      row.append(createInputCell("text", "own-contribution-input", values.ownContribution ?? 0, { inputMode: "numeric", placeholder: "Own paid" }));
+      row.append(createInputCell("text", "own-contribution-input", values.ownContribution ?? 0, { inputMode: "numeric", placeholder: "Auto own paid", readOnly: true }));
       row.append(createInputCell("number", "day-input", values.day || "1", { min: "1", max: "31", step: "1" }));
     }
 
@@ -253,19 +259,30 @@ function addTableRow(body, rowClass, values) {
 }
 
 function syncDisbursementBankContributions(values) {
-  elements["disbursement-body"].querySelectorAll("tr").forEach((row, index) => {
+  let remainingLoanAmount = Math.max(values.loanAmount, 0);
+  const rows = [...elements["disbursement-body"].querySelectorAll("tr")];
+  const calculatedContributions = new Map();
+
+  values.disbursements
+    .map((disbursement, index) => ({ ...disbursement, index }))
+    .sort((a, b) => a.month - b.month || a.day - b.day || a.index - b.index)
+    .forEach((disbursement) => {
+      const disbursementAmount = getDisbursementTotalAmount(values.agreementValue, disbursement.percentage || 0);
+      const bankContribution = Math.min(disbursementAmount, remainingLoanAmount);
+      const ownContribution = Math.max(disbursementAmount - bankContribution, 0);
+
+      remainingLoanAmount = Math.max(remainingLoanAmount - bankContribution, 0);
+      calculatedContributions.set(disbursement.index, { bankContribution, ownContribution });
+    });
+
+  rows.forEach((row, index) => {
     const bankContributionInput = row.querySelector(".bank-contribution-input");
-    if (!bankContributionInput) return;
+    const ownContributionInput = row.querySelector(".own-contribution-input");
+    const contribution = calculatedContributions.get(index);
+    if (!bankContributionInput || !ownContributionInput || !contribution) return;
 
-    const disbursement = values.disbursements[index];
-    if (!disbursement) return;
-
-    const ownContributionInput = disbursement.ownContributionInput || "0";
-    if (!isWholeNumberInput(ownContributionInput || "0") || disbursement.ownContribution < 0) return;
-
-    const disbursementAmount = getDisbursementTotalAmount(values.agreementValue, disbursement.percentage || 0);
-    const bankContribution = Math.max(disbursementAmount - disbursement.ownContribution, 0);
-    bankContributionInput.value = String(bankContribution);
+    bankContributionInput.value = String(contribution.bankContribution);
+    ownContributionInput.value = String(contribution.ownContribution);
   });
 }
 
@@ -301,6 +318,7 @@ function toggleConstructionOptions() {
 function resetForm() {
   elements["agreement-value"].value = DEFAULTS.agreementValue;
   elements["loan-amount"].value = DEFAULTS.loanAmount;
+  elements["eligibility-percentage"].value = DEFAULTS.eligibilityPercentage;
   elements["interest-rate"].value = DEFAULTS.interestRate;
   elements["loan-duration"].value = DEFAULTS.loanDuration;
   elements["emi-day"].value = DEFAULTS.emiDay;
@@ -382,6 +400,7 @@ function readFormValues() {
     agreementValueInput: elements["agreement-value"].value,
     loanAmount: readNumber("loan-amount"),
     loanAmountInput: elements["loan-amount"].value,
+    eligibilityPercentage: readNumber("eligibility-percentage"),
     interestRate: readNumber("interest-rate"),
     loanDuration: readNumber("loan-duration"),
     emiDay: readNumber("emi-day"),
@@ -476,8 +495,12 @@ function validateInputs(values) {
   if (values.loanAmount <= 0) {
     return "Loan amount must be greater than zero.";
   }
-  if (values.loanAmount > values.agreementValue) {
-    return "Loan amount cannot be greater than agreement value.";
+  if (!Number.isFinite(values.eligibilityPercentage) || values.eligibilityPercentage <= 0) {
+    return "Bank eligibility percentage must be greater than zero.";
+  }
+  const eligibleLoanAmount = getEligibleLoanAmount(values.agreementValue, values.eligibilityPercentage);
+  if (values.loanAmount > eligibleLoanAmount) {
+    return `Loan amount opted cannot be greater than the bank eligibility cap of ${formatCurrency(eligibleLoanAmount)}.`;
   }
   if (values.interestRate < 0) {
     return "Borrowing interest rate cannot be negative.";
@@ -724,6 +747,8 @@ function buildSchedule(values) {
     agreementValue: values.agreementValue,
     loanAmount: values.loanAmount,
     loanAmountPercentage: calculatePercentage(values.loanAmount, values.agreementValue),
+    eligibilityPercentage: values.eligibilityPercentage,
+    eligibleLoanAmount: getEligibleLoanAmount(values.agreementValue, values.eligibilityPercentage),
     ownContribution: isConstruction
       ? values.disbursements.reduce((total, row) => total + row.ownContribution, 0)
       : Math.max(values.agreementValue - values.loanAmount, 0),
@@ -749,7 +774,8 @@ function buildSchedule(values) {
 function renderSummary(result) {
   const metrics = [
     ["Agreement value", formatCurrency(result.agreementValue)],
-    ["Loan amount", `${formatCurrency(result.loanAmount)} (${formatPercent(result.loanAmountPercentage)})`],
+    ["Loan amount opted", `${formatCurrency(result.loanAmount)} (${formatPercent(result.loanAmountPercentage)})`],
+    ["Bank eligibility cap", `${formatCurrency(result.eligibleLoanAmount)} (${formatPercent(result.eligibilityPercentage)})`],
     ["Own contribution", `${formatCurrency(result.ownContribution)} (${formatPercent(result.ownContributionPercentage)})`],
     ["Total disbursed", formatCurrency(result.totalDisbursed)],
     ["Starting EMI", formatCurrency(result.firstEmi)],
