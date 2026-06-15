@@ -1,5 +1,5 @@
 const DEFAULTS = {
-  agreementValue: 16533260,
+  agreementValue: 15378378,
   loanAmount: 13000000,
   interestRate: 7.55,
   loanDuration: 20,
@@ -8,7 +8,7 @@ const DEFAULTS = {
   propertyStatus: "construction",
   moratorium: false,
   possessionMonth: 1,
-  disbursements: [{ month: 1, percentage: 15, day: 31 }],
+  disbursements: [{ month: 1, percentage: 30, bankContribution: 2479989, ownContribution: 2364200, day: 31 }],
   rateChanges: [],
   extraPayments: [{ month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 }],
 };
@@ -101,6 +101,14 @@ function formatPercent(percent) {
 
 function calculatePercentage(amount, baseAmount) {
   return baseAmount > 0 ? (amount / baseAmount) * 100 : 0;
+}
+
+function getDisbursementTotalAmount(agreementValue, percentage) {
+  return Math.round(((agreementValue * percentage) / 100) * 1.05);
+}
+
+function getDisbursementBaseAmount(agreementValue, percentage) {
+  return (agreementValue * percentage) / 100;
 }
 
 function addMonths(startMonth, monthsToAdd) {
@@ -213,7 +221,11 @@ function addTableRow(body, rowClass, values) {
   } else {
     if (rowClass === "disbursement-row") {
       row.append(createInputCell("number", "percentage-input", values.percentage, { min: "0", max: "100", step: "0.01" }));
+      row.append(createTextCell("base-amount-cell"));
+      row.append(createTextCell("gst-amount-cell"));
       row.append(createTextCell("derived-amount-cell"));
+      row.append(createInputCell("text", "bank-contribution-input", values.bankContribution ?? "", { inputMode: "numeric", placeholder: "Bank paid" }));
+      row.append(createInputCell("text", "own-contribution-input", values.ownContribution ?? 0, { inputMode: "numeric", placeholder: "Own paid" }));
       row.append(createInputCell("number", "day-input", values.day || "1", { min: "1", max: "31", step: "1" }));
     }
 
@@ -241,11 +253,17 @@ function addTableRow(body, rowClass, values) {
 
 function renderDisbursementDerivedAmounts(values) {
   elements["disbursement-body"].querySelectorAll("tr").forEach((row, index) => {
+    const baseAmountCell = row.querySelector(".base-amount-cell");
+    const gstAmountCell = row.querySelector(".gst-amount-cell");
     const amountCell = row.querySelector(".derived-amount-cell");
     if (!amountCell) return;
 
     const disbursement = values.disbursements[index];
-    const amount = values.agreementValue * (disbursement?.percentage || 0) / 100;
+    const baseAmount = getDisbursementBaseAmount(values.agreementValue, disbursement?.percentage || 0);
+    const gstAmount = baseAmount * 0.05;
+    const amount = getDisbursementTotalAmount(values.agreementValue, disbursement?.percentage || 0);
+    if (baseAmountCell) baseAmountCell.textContent = Number.isFinite(baseAmount) && baseAmount > 0 ? formatCurrency(baseAmount) : "—";
+    if (gstAmountCell) gstAmountCell.textContent = Number.isFinite(gstAmount) && gstAmount > 0 ? formatCurrency(gstAmount) : "—";
     amountCell.textContent = Number.isFinite(amount) && amount > 0 ? formatCurrency(amount) : "—";
   });
 }
@@ -296,12 +314,18 @@ function readDisbursementRows() {
     .map((row) => {
       const monthInput = row.querySelector(".month-input").value;
       const percentageInput = row.querySelector(".percentage-input").value;
+      const bankContributionInput = row.querySelector(".bank-contribution-input").value;
+      const ownContributionInput = row.querySelector(".own-contribution-input").value;
       const dayInput = row.querySelector(".day-input").value;
       return {
         month: parseNumberInput(monthInput),
         monthInput,
         percentage: parseNumberInput(percentageInput),
         percentageInput,
+        bankContribution: parseNumberInput(bankContributionInput),
+        bankContributionInput,
+        ownContribution: parseNumberInput(ownContributionInput),
+        ownContributionInput,
         day: parseNumberInput(dayInput),
         dayInput,
       };
@@ -383,6 +407,27 @@ function validateDisbursementSchedules(rows) {
   return "";
 }
 
+
+function validateDisbursementFunding(rows, agreementValue) {
+  for (const row of rows) {
+    if (!isWholeNumberInput(row.bankContributionInput || "0")) {
+      return "Bank contribution must be a whole number.";
+    }
+    if (!isWholeNumberInput(row.ownContributionInput || "0")) {
+      return "Own contribution must be a whole number.";
+    }
+    if (row.bankContribution < 0 || row.ownContribution < 0) {
+      return "Disbursement contributions cannot be negative.";
+    }
+
+    const disbursementAmount = getDisbursementTotalAmount(agreementValue, row.percentage);
+    if (row.bankContribution + row.ownContribution !== disbursementAmount) {
+      return `Bank contribution plus own contribution must equal the GST-inclusive disbursement amount of ${formatCurrency(disbursementAmount)}.`;
+    }
+  }
+  return "";
+}
+
 function validateExtraPaymentSchedules(rows, maximumMonths) {
   for (const row of rows) {
     if (row.day < 1 || row.day > 31) {
@@ -456,12 +501,12 @@ function validateInputs(values) {
     const disbursementScheduleError = validateDisbursementSchedules(values.disbursements);
     if (disbursementScheduleError) return disbursementScheduleError;
 
-    const totalDisbursementAmount = values.disbursements.reduce(
-      (total, row) => total + (values.agreementValue * row.percentage) / 100,
-      0,
-    );
-    if (totalDisbursementAmount > values.loanAmount) {
-      return "Total disbursement value cannot be greater than the loan amount.";
+    const disbursementFundingError = validateDisbursementFunding(values.disbursements, values.agreementValue);
+    if (disbursementFundingError) return disbursementFundingError;
+
+    const totalBankDisbursementAmount = values.disbursements.reduce((total, row) => total + row.bankContribution, 0);
+    if (totalBankDisbursementAmount > values.loanAmount) {
+      return "Total bank contribution cannot be greater than the loan amount.";
     }
 
     if (values.moratorium && (values.possessionMonth < 1 || values.possessionMonth > maximumMonths)) {
@@ -503,7 +548,9 @@ function expandDisbursements(rows, startMonth, agreementValue) {
     .map((row) => ({
       month: row.month,
       percentage: row.percentage,
-      amount: (agreementValue * row.percentage) / 100,
+      amount: row.bankContribution,
+      totalAmount: getDisbursementTotalAmount(agreementValue, row.percentage),
+      ownContribution: row.ownContribution,
       day: row.day,
       date: getLoanMonthDate(startMonth, row.month - 1, row.day),
     }))
@@ -659,8 +706,15 @@ function buildSchedule(values) {
     agreementValue: values.agreementValue,
     loanAmount: values.loanAmount,
     loanAmountPercentage: calculatePercentage(values.loanAmount, values.agreementValue),
-    ownContribution: Math.max(values.agreementValue - values.loanAmount, 0),
-    ownContributionPercentage: calculatePercentage(Math.max(values.agreementValue - values.loanAmount, 0), values.agreementValue),
+    ownContribution: isConstruction
+      ? values.disbursements.reduce((total, row) => total + row.ownContribution, 0)
+      : Math.max(values.agreementValue - values.loanAmount, 0),
+    ownContributionPercentage: calculatePercentage(
+      isConstruction
+        ? values.disbursements.reduce((total, row) => total + row.ownContribution, 0)
+        : Math.max(values.agreementValue - values.loanAmount, 0),
+      values.agreementValue,
+    ),
     rows,
     firstEmi,
     totalDisbursed,
@@ -814,7 +868,7 @@ function initializeCalculator() {
     elements["reset-button"].addEventListener("click", resetForm);
     elements["download-button"].addEventListener("click", downloadCsv);
     elements["add-disbursement-button"].addEventListener("click", () => {
-      addTableRow(elements["disbursement-body"], "disbursement-row", { month: 1, percentage: 0, day: 1 });
+      addTableRow(elements["disbursement-body"], "disbursement-row", { month: 1, percentage: 0, bankContribution: 0, ownContribution: 0, day: 1 });
     });
     elements["add-rate-button"].addEventListener("click", () => {
       addTableRow(elements["rate-change-body"], "rate-row", { month: 1, rate: elements["interest-rate"].value });
