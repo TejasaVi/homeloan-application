@@ -166,25 +166,33 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
   let eventIndex = 0;
   let currentDate = addDays(periodStart, 1);
 
-  while (currentDate <= paymentDate) {
+  function applyEvent(event) {
+    if (event.type === "disbursement") {
+      interestBalance += event.amount;
+      disbursed += event.amount;
+      totalDisbursed += event.amount;
+    } else {
+      const paymentAmount = Math.min(event.amount, interestBalance);
+      interestBalance = Math.max(interestBalance - paymentAmount, 0);
+      extraPaid += paymentAmount;
+    }
+  }
+
+  // Accrue interest for completed days only. The payment/EMI date itself should
+  // update the balance, but it should not add another day of interest.
+  while (currentDate < paymentDate) {
     while (eventIndex < periodEvents.length && periodEvents[eventIndex].date <= currentDate) {
-      const event = periodEvents[eventIndex];
-
-      if (event.type === "disbursement") {
-        interestBalance += event.amount;
-        disbursed += event.amount;
-        totalDisbursed += event.amount;
-      } else {
-        const paymentAmount = Math.min(event.amount, interestBalance);
-        interestBalance = Math.max(interestBalance - paymentAmount, 0);
-        extraPaid += paymentAmount;
-      }
-
+      applyEvent(periodEvents[eventIndex]);
       eventIndex += 1;
     }
 
     interest += calculateDailyInterest(interestBalance, annualRate, 1);
     currentDate = addDays(currentDate, 1);
+  }
+
+  while (eventIndex < periodEvents.length && periodEvents[eventIndex].date <= paymentDate) {
+    applyEvent(periodEvents[eventIndex]);
+    eventIndex += 1;
   }
 
   return {
