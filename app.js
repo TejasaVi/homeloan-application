@@ -147,10 +147,6 @@ function getLoanMonthDate(startMonth, monthsToAdd, dayOfMonth) {
   return date;
 }
 
-function getDaysBetween(startDate, endDate) {
-  return Math.max(Math.round((endDate - startDate) / 86400000), 0);
-}
-
 function addDays(date, daysToAdd) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + daysToAdd);
@@ -161,11 +157,43 @@ function calculateDailyInterest(principal, annualRate, days) {
   return principal * (annualRate / 100) * (days / 365);
 }
 
-function calculateInterestThroughDate(principal, annualRate, startDate, paymentDate) {
-  if (principal <= 0 || paymentDate < startDate) {
-    return 0;
+function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart, paymentDate, periodEvents) {
+  let interest = 0;
+  let interestBalance = openingBalance;
+  let extraPaid = 0;
+  let disbursed = 0;
+  let totalDisbursed = 0;
+  let eventIndex = 0;
+  let currentDate = addDays(periodStart, 1);
+
+  while (currentDate <= paymentDate) {
+    while (eventIndex < periodEvents.length && periodEvents[eventIndex].date <= currentDate) {
+      const event = periodEvents[eventIndex];
+
+      if (event.type === "disbursement") {
+        interestBalance += event.amount;
+        disbursed += event.amount;
+        totalDisbursed += event.amount;
+      } else {
+        const paymentAmount = Math.min(event.amount, interestBalance);
+        interestBalance = Math.max(interestBalance - paymentAmount, 0);
+        extraPaid += paymentAmount;
+      }
+
+      eventIndex += 1;
+    }
+
+    interest += calculateDailyInterest(interestBalance, annualRate, 1);
+    currentDate = addDays(currentDate, 1);
   }
-  return calculateDailyInterest(principal, annualRate, getDaysBetween(startDate, paymentDate) + 1);
+
+  return {
+    balance: interestBalance,
+    disbursed,
+    extraPaid,
+    interest,
+    totalDisbursed,
+  };
 }
 
 function calculateMonthlyPayment(principal, annualRate, months) {
@@ -700,30 +728,12 @@ function buildSchedule(values) {
       ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
     ].sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
-    let interest = 0;
-    let extraPaid = 0;
-    let disbursed = 0;
-    let interestBalance = balance;
-    let lastInterestDate = addDays(periodStart, 1);
-
-    periodEvents.forEach((event) => {
-      if (event.type === "disbursement") {
-        interest += calculateDailyInterest(interestBalance, rate, getDaysBetween(lastInterestDate, event.date));
-        interestBalance += event.amount;
-        disbursed += event.amount;
-        totalDisbursed += event.amount;
-        lastInterestDate = event.date;
-      } else {
-        interest += calculateInterestThroughDate(interestBalance, rate, lastInterestDate, event.date);
-        const paymentAmount = Math.min(event.amount, interestBalance);
-        interestBalance = Math.max(interestBalance - paymentAmount, 0);
-        extraPaid += paymentAmount;
-        lastInterestDate = addDays(event.date, 1);
-      }
-    });
-
-    interest += calculateInterestThroughDate(interestBalance, rate, lastInterestDate, date);
-    balance = interestBalance;
+    const interestResult = calculateDailyInterestForPeriod(balance, rate, periodStart, date, periodEvents);
+    const interest = interestResult.interest;
+    const extraPaid = interestResult.extraPaid;
+    const disbursed = interestResult.disbursed;
+    totalDisbursed += interestResult.totalDisbursed;
+    balance = interestResult.balance;
 
     let emi = 0;
     let principalComponent = 0;
