@@ -835,6 +835,54 @@ function getPaymentsForMonth(payments, monthNumber) {
   return payments.filter((payment) => payment.month === monthNumber);
 }
 
+function calculateDailyInterestForCalendarMonth(openingBalance, annualRate, periodStart, periodEnd, periodEvents) {
+  let interest = 0;
+  let interestBalance = openingBalance;
+  let extraPaid = 0;
+  let disbursed = 0;
+  let totalDisbursed = 0;
+  let eventIndex = 0;
+  let currentDate = getDateOnly(periodStart);
+  const endDate = getDateOnly(periodEnd);
+
+  function applyEvent(event) {
+    if (event.type === "disbursement") {
+      interestBalance += event.amount;
+      disbursed += event.amount;
+      totalDisbursed += event.amount;
+    } else {
+      const paymentAmount = Math.min(event.amount, interestBalance);
+      interestBalance = Math.max(interestBalance - paymentAmount, 0);
+      if (event.countInExtra !== false) {
+        extraPaid += paymentAmount;
+      }
+    }
+  }
+
+  while (currentDate <= endDate) {
+    while (eventIndex < periodEvents.length && getDateOnly(periodEvents[eventIndex].date) <= currentDate) {
+      applyEvent(periodEvents[eventIndex]);
+      eventIndex += 1;
+    }
+
+    interest += calculateDailyInterest(interestBalance, annualRate, 1);
+    currentDate = addDays(currentDate, 1);
+  }
+
+  return {
+    balance: interestBalance,
+    disbursed,
+    extraPaid,
+    interest,
+    totalDisbursed,
+  };
+}
+
+function getRemainingDaysInMonth(paymentDate, periodEnd) {
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.max(Math.floor((getDateOnly(periodEnd) - getDateOnly(paymentDate)) / millisecondsPerDay) + 1, 0);
+}
+
 
 function roundInterestAmount(amount, useBoundaryDayRounding = false) {
   return useBoundaryDayRounding ? Math.floor(amount) : Math.round(amount);
@@ -882,12 +930,12 @@ function buildSchedule(values) {
   for (
     let monthNumber = 1;
     monthNumber <= maximumMonths &&
-    (balance > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 2, values.emiDay) < finalDisbursementDate);
+    (balance > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 1, 1) <= finalDisbursementDate);
     monthNumber += 1
   ) {
-    const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
-    const date = getLoanMonthDate(values.startMonth, monthNumber, values.emiDay);
-    const periodEnd = date;
+    const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 1, 1);
+    const periodEnd = getLastDateOfCalendarMonth(periodStart);
+    const date = periodEnd;
     const rate = getRateForMonth(values.interestRate, sortedRateChanges, monthNumber);
 
     // Recompute fixed EMI only when the rate has just changed this month
@@ -904,53 +952,76 @@ function buildSchedule(values) {
     const openingBalance = balance;
     const isMoratorium = isConstruction && values.moratorium && monthNumber < moratoriumEndMonth;
 
-    const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, periodEnd);
-    const periodPayments = getPaymentsForPeriod(extraPayments, periodStart, periodEnd, true);
-    const periodEvents = [
+    const periodDisbursements = getPaymentsForMonth(disbursements, monthNumber);
+    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber);
+    const balanceEvents = [
       ...periodDisbursements.map((d) => ({ ...d, type: "disbursement" })),
       ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
     ].sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
-    const interestResult = calculateDailyInterestForPeriod(
+    const baseInterestResult = calculateDailyInterestForCalendarMonth(
       balance,
       rate,
       periodStart,
       periodEnd,
-      periodEvents
+      balanceEvents
     );
-    const interest = roundInterestAmount(interestResult.interest);
-    const extraPaid = interestResult.extraPaid;
-    const disbursed = interestResult.disbursed;
-    totalDisbursed += interestResult.totalDisbursed;
-    balance = interestResult.balance;
 
     let emi = 0;
+    let interest = roundInterestAmount(baseInterestResult.interest);
     let principalComponent = 0;
+    let interestResult = baseInterestResult;
 
     if (isMoratorium) {
       // Moratorium: show only the accrued interest, no principal reduction
       emi = interest;
       moratoriumInterest += interest;
     } else {
-      // Normal EMI month: use the fixed EMI, derive principal from it
+      // Normal EMI month: use the fixed EMI, derive principal from daily interest.
+      // EMI principal is applied on the EMI date itself, before that day's
+      // interest, so same-month interest is reduced from the payment day onward.
       emi = currentEmi;
+      const emiDate = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
+      const dailyRate = rate / 100 / 365;
+      const emiInterestDays = getRemainingDaysInMonth(emiDate, periodEnd);
+      const emiInterestFactor = dailyRate * emiInterestDays;
+      const estimatedInterest = Math.max(
+        (baseInterestResult.interest - emiInterestFactor * emi) / Math.max(1 - emiInterestFactor, Number.EPSILON),
+        0
+      );
+      principalComponent = Math.max(emi - roundInterestAmount(estimatedInterest), 0);
 
-      // On the very last month(s), emi might exceed the remaining balance + interest;
-      // clamp so we never overpay.
-      const totalOwed = balance + interest;
-      if (emi > totalOwed) {
-        emi = totalOwed;
-      }
+      const eventsWithEmi = [
+        ...balanceEvents,
+        {
+          amount: principalComponent,
+          countInExtra: false,
+          date: emiDate,
+          type: "prepayment",
+        },
+      ].sort((a, b) => a.date - b.date || (a.countInExtra === false ? -1 : 1));
 
+      interestResult = calculateDailyInterestForCalendarMonth(
+        balance,
+        rate,
+        periodStart,
+        periodEnd,
+        eventsWithEmi
+      );
+      interest = roundInterestAmount(interestResult.interest);
+
+      emi = Math.min(currentEmi, interestResult.balance + interest);
       principalComponent = Math.max(emi - interest, 0);
-      principalComponent = Math.min(principalComponent, balance);
 
       if (!firstEmi && emi > 0) {
         firstEmi = emi;
       }
     }
 
-    balance = Math.max(balance - principalComponent, 0);
+    const extraPaid = interestResult.extraPaid;
+    const disbursed = interestResult.disbursed;
+    totalDisbursed += interestResult.totalDisbursed;
+    balance = interestResult.balance;
     totalInterest += interest;
     totalPrincipal += principalComponent;
     totalExtra += extraPaid;
