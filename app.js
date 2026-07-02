@@ -38,7 +38,7 @@ const DEFAULTS = {
     { month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 },
     { month: 2, amount: 325, frequency: "once", endMonth: "", count: "", day: 1 },
     { month: 2, amount: 16, frequency: "once", endMonth: "", count: "", day: 27 },
-    { month: 3, amount: 149352, frequency: "once", endMonth: "", count: "", day: 1 },
+    { month: 3, amount: 149277, frequency: "once", endMonth: "", count: "", day: 1 },
     { month: 3, amount: 630000, frequency: "once", endMonth: "", count: "", day: 2 },
   ],
 };
