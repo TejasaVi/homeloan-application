@@ -11,8 +11,22 @@ const DEFAULTS = {
   possessionMonth: 1,
   disbursements: [
     { month: 1, percentage: 30, bankContribution: 2479989, ownContribution: 2364200, day: 31 },
-    ...[15, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5].map((percentage, index) => ({
-      month: index + 3,
+    ...[
+      { month: 4, percentage: 15 },
+      { month: 4, percentage: 4 },
+      { month: 5, percentage: 4 },
+      { month: 6, percentage: 4 },
+      { month: 7, percentage: 4 },
+      { month: 8, percentage: 4 },
+      { month: 9, percentage: 4 },
+      { month: 10, percentage: 4 },
+      { month: 11, percentage: 4 },
+      { month: 12, percentage: 4 },
+      { month: 13, percentage: 4 },
+      { month: 14, percentage: 5 },
+      { month: 15, percentage: 5 },
+    ].map(({ month, percentage }) => ({
+      month,
       percentage,
       bankContribution: "",
       ownContribution: 0,
@@ -204,7 +218,16 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
   ]
     .filter((event) => {
       const eventDate = getDateOnly(event.date);
-      return eventDate > baselineDate && eventDate <= currentDate;
+      const isSameDayAsBaseline = eventDate.getTime() === baselineDate.getTime();
+
+      // The schedule may carry recurring payments that fall exactly on the next
+      // period boundary into the previous closing balance. One-time payments on
+      // that same boundary date are not part of that closing balance, so include
+      // them here when calculating today's outstanding principal.
+      return (
+        (eventDate > baselineDate || (isSameDayAsBaseline && event.frequency === "once")) &&
+        eventDate <= currentDate
+      );
     })
     .sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
