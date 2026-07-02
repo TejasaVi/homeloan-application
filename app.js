@@ -163,24 +163,40 @@ function getDateOnly(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function getLastDateOfCalendarMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function getInclusiveDayCount(startDate, endDate) {
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.max(Math.floor((getDateOnly(endDate) - getDateOnly(startDate)) / millisecondsPerDay) + 1, 0);
+}
+
 function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, today = new Date()) {
   const currentDate = getDateOnly(today);
   let previousRowIndex = -1;
   rows.forEach((row, index) => {
-    if (getDateOnly(row.date) < currentDate) {
+    const completedDate = getDateOnly(row.periodEnd || row.date);
+    if (completedDate < currentDate) {
       previousRowIndex = index;
     }
   });
   const previousRow = previousRowIndex >= 0 ? rows[previousRowIndex] : null;
-  const nextRow = previousRowIndex + 1 < rows.length ? rows[previousRowIndex + 1] : null;
+  const activeRow = previousRowIndex + 1 < rows.length ? rows[previousRowIndex + 1] : null;
+  const nextRow = activeRow || previousRow;
   const baselineDate = previousRow
-    ? getDateOnly(previousRow.date)
-    : addDays(getLoanMonthDate(values.startMonth, 0, values.emiDay), -1);
-  let outstandingPrincipal = previousRow
+    ? getDateOnly(previousRow.periodEnd || previousRow.date)
+    : activeRow
+      ? getDateOnly(activeRow.periodStart || activeRow.date)
+      : addDays(getLoanMonthDate(values.startMonth, 0, values.emiDay), -1);
+  const baselinePrincipal = previousRow
     ? previousRow.closingBalance
-    : values.propertyStatus === "construction"
-      ? 0
-      : values.loanAmount;
+    : activeRow
+      ? activeRow.openingBalance
+      : values.propertyStatus === "construction"
+        ? 0
+        : values.loanAmount;
+  let outstandingPrincipal = baselinePrincipal;
 
   const currentEvents = [
     ...disbursements.map((disbursement) => ({ ...disbursement, type: "disbursement" })),
@@ -188,7 +204,7 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
   ]
     .filter((event) => {
       const eventDate = getDateOnly(event.date);
-      return eventDate > baselineDate && eventDate < currentDate;
+      return eventDate > baselineDate && eventDate <= currentDate;
     })
     .sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
@@ -201,21 +217,13 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
   });
 
   const currentRate = nextRow?.rate ?? previousRow?.rate ?? values.interestRate;
-  const interestResult = calculateDailyInterestForPeriod(
-    previousRow
-      ? previousRow.closingBalance
-      : values.propertyStatus === "construction"
-        ? 0
-        : values.loanAmount,
-    currentRate,
-    baselineDate,
-    currentDate,
-    currentEvents,
-  );
+  const monthEndDate = getLastDateOfCalendarMonth(currentDate);
+  const estimatedInterestDays = getInclusiveDayCount(currentDate, monthEndDate);
+  const estimatedInterest = calculateDailyInterest(outstandingPrincipal, currentRate, estimatedInterestDays);
 
   return {
     currentOutstandingPrincipal: Math.max(outstandingPrincipal, 0),
-    currentMonthEstimatedInterest: roundInterestAmount(interestResult.interest),
+    currentMonthEstimatedInterest: roundInterestAmount(estimatedInterest),
     currentOutstandingDate: currentDate,
   };
 }
@@ -879,6 +887,8 @@ function buildSchedule(values) {
     rows.push({
       monthNumber,
       date,
+      periodStart,
+      periodEnd,
       status: isMoratorium ? "Moratorium" : "EMI",
       rate,
       disbursed,
