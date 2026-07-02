@@ -91,6 +91,11 @@ const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   year: "numeric",
 });
 
+const monthYearFormatter = new Intl.DateTimeFormat("en-IN", {
+  month: "long",
+  year: "numeric",
+});
+
 const percentFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
@@ -289,6 +294,7 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
   return {
     currentOutstandingPrincipal: Math.max(outstandingPrincipal, 0),
     currentMonthEstimatedInterest: roundInterestAmount(currentMonthInterest),
+    currentMonthInterestDate: nextRow?.periodStart || currentDate,
     currentOutstandingDate: currentDate,
   };
 }
@@ -1196,7 +1202,7 @@ function renderSummary(result) {
     ["Own contribution", `${formatCurrency(result.ownContribution)} (${formatPercent(result.ownContributionPercentage)})`],
     ["Total disbursed", formatCurrency(result.totalDisbursed)],
     [`Current statement outstanding (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentOutstandingPrincipal)],
-    [`Estimated current month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
+    [`Estimated interest for ${monthYearFormatter.format(result.currentMonthInterestDate)}`, formatCurrency(result.currentMonthEstimatedInterest)],
     ["Starting EMI", formatCurrency(result.firstEmi)],
     ["Total interest", formatCurrency(result.totalInterest)],
     ["Moratorium interest", formatCurrency(result.moratoriumInterest)],
