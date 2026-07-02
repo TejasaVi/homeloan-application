@@ -335,6 +335,20 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
   };
 }
 
+function getBalanceAfterEventsThroughDate(openingBalance, events, throughDate) {
+  return events.reduce((balance, event) => {
+    if (event.date > throughDate) {
+      return balance;
+    }
+
+    if (event.type === "disbursement") {
+      return balance + event.amount;
+    }
+
+    return Math.max(balance - event.amount, 0);
+  }, openingBalance);
+}
+
 function calculateMonthlyPayment(principal, annualRate, months) {
   if (principal <= 0 || months <= 0) {
     return 0;
@@ -1025,41 +1039,45 @@ function buildSchedule(values) {
       // Normal EMI month: use the fixed EMI, derive principal from daily interest.
       // EMI principal is applied on the EMI date itself, before that day's
       // interest, so same-month interest is reduced from the payment day onward.
-      emi = currentEmi;
       const emiDate = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
-      const dailyRate = rate / 100 / 365;
-      const emiInterestDays = getRemainingDaysInMonth(emiDate, periodEnd);
-      const emiInterestFactor = dailyRate * emiInterestDays;
-      const estimatedInterest = Math.max(
-        (baseInterestResult.interest - emiInterestFactor * emi) / Math.max(1 - emiInterestFactor, Number.EPSILON),
-        0
-      );
-      principalComponent = Math.max(emi - roundInterestAmount(estimatedInterest), 0);
+      const balanceOnEmiDate = getBalanceAfterEventsThroughDate(balance, balanceEvents, emiDate);
 
-      const eventsWithEmi = [
-        ...balanceEvents,
-        {
-          amount: principalComponent,
-          countInExtra: false,
-          date: emiDate,
-          type: "prepayment",
-        },
-      ].sort((a, b) => a.date - b.date || (a.countInExtra === false ? -1 : 1));
+      if (balanceOnEmiDate > 0.01) {
+        emi = currentEmi;
+        const dailyRate = rate / 100 / 365;
+        const emiInterestDays = getRemainingDaysInMonth(emiDate, periodEnd);
+        const emiInterestFactor = dailyRate * emiInterestDays;
+        const estimatedInterest = Math.max(
+          (baseInterestResult.interest - emiInterestFactor * emi) / Math.max(1 - emiInterestFactor, Number.EPSILON),
+          0
+        );
+        principalComponent = Math.max(emi - roundInterestAmount(estimatedInterest), 0);
 
-      interestResult = calculateDailyInterestForCalendarMonth(
-        balance,
-        rate,
-        periodStart,
-        periodEnd,
-        eventsWithEmi
-      );
-      interest = roundInterestAmount(interestResult.interest);
+        const eventsWithEmi = [
+          ...balanceEvents,
+          {
+            amount: principalComponent,
+            countInExtra: false,
+            date: emiDate,
+            type: "prepayment",
+          },
+        ].sort((a, b) => a.date - b.date || (a.countInExtra === false ? -1 : 1));
 
-      emi = Math.min(currentEmi, interestResult.balance + interest);
-      principalComponent = Math.max(emi - interest, 0);
+        interestResult = calculateDailyInterestForCalendarMonth(
+          balance,
+          rate,
+          periodStart,
+          periodEnd,
+          eventsWithEmi
+        );
+        interest = roundInterestAmount(interestResult.interest);
 
-      if (!firstEmi && emi > 0) {
-        firstEmi = emi;
+        emi = Math.min(currentEmi, interestResult.balance + interest);
+        principalComponent = Math.max(emi - interest, 0);
+
+        if (!firstEmi && emi > 0) {
+          firstEmi = emi;
+        }
       }
     }
 
