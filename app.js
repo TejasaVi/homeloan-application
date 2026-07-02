@@ -241,18 +241,33 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
   // principal, so we do not calculate interest on interest.
   let outstandingPrincipal = baselinePrincipal;
 
+  const activeEmiDate = activeRow
+    ? getLoanMonthDate(values.startMonth, activeRow.monthNumber - 1, values.emiDay)
+    : null;
+  const activeEmiPrincipalEvent =
+    activeRow &&
+    activeRow.principalComponent > 0 &&
+    activeEmiDate > baselineDate &&
+    activeEmiDate <= currentDate
+      ? [
+          {
+            amount: activeRow.principalComponent,
+            countInExtra: false,
+            date: activeEmiDate,
+            type: "prepayment",
+          },
+        ]
+      : [];
+
   const currentEvents = [
     ...disbursements.map((disbursement) => ({ ...disbursement, type: "disbursement" })),
     ...extraPayments.map((payment) => ({ ...payment, type: "prepayment" })),
+    ...activeEmiPrincipalEvent,
   ]
     .filter((event) => {
       const eventDate = getDateOnly(event.date);
-      const isSameDayAsBaseline = eventDate.getTime() === baselineDate.getTime();
 
-      return (
-        (eventDate > baselineDate || (isSameDayAsBaseline && event.frequency !== "once")) &&
-        eventDate <= currentDate
-      );
+      return eventDate > baselineDate && eventDate <= currentDate;
     })
     .sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
