@@ -35,11 +35,11 @@ const DEFAULTS = {
   ],
   rateChanges: [],
   extraPayments: [
-    { month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 },
-    { month: 2, amount: 325, frequency: "once", endMonth: "", count: "", day: 1 },
-    { month: 2, amount: 16, frequency: "once", endMonth: "", count: "", day: 27 },
-    { month: 3, amount: 149277, frequency: "once", endMonth: "", count: "", day: 1 },
-    { month: 3, amount: 630000, frequency: "once", endMonth: "", count: "", day: 2 },
+    { month: 3, amount: 105275, frequency: "monthly", count: "", dayMode: "last", day: "" },
+    { month: 2, amount: 325, frequency: "once", count: "", dayMode: "emi", day: "" },
+    { month: 2, amount: 16, frequency: "once", count: "", dayMode: "specific", day: 27 },
+    { month: 3, amount: 149277, frequency: "once", count: "", dayMode: "emi", day: "" },
+    { month: 3, amount: 630000, frequency: "once", count: "", dayMode: "specific", day: 2 },
   ],
 };
 
@@ -163,8 +163,25 @@ function getLoanMonthDate(startMonth, monthsToAdd, dayOfMonth) {
   const [year, month] = startMonth.split("-").map(Number);
   const date = new Date(year, month - 1 + monthsToAdd, 1);
   const lastDay = getLastDayOfMonth(date.getFullYear(), date.getMonth());
-  date.setDate(Math.min(dayOfMonth, lastDay));
+  const normalizedDay = dayOfMonth === "last" ? lastDay : Number(dayOfMonth);
+  date.setDate(Math.min(normalizedDay, lastDay));
   return date;
+}
+
+function formatMonthInputValue(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getLoanMonthInputValue(monthNumber) {
+  return formatMonthInputValue(addMonths(elements["start-month"].value || DEFAULTS.startMonth, Math.max(monthNumber - 1, 0)));
+}
+
+function getLoanMonthNumberFromInput(monthInput) {
+  if (!monthInput) return 0;
+  const [startYear, startMonth] = (elements["start-month"].value || DEFAULTS.startMonth).split("-").map(Number);
+  const [inputYear, inputMonth] = monthInput.split("-").map(Number);
+  if (!startYear || !startMonth || !inputYear || !inputMonth) return 0;
+  return (inputYear - startYear) * 12 + (inputMonth - startMonth) + 1;
 }
 
 function addDays(date, daysToAdd) {
@@ -382,7 +399,11 @@ function createTextCell(className, text = "—") {
 function addTableRow(body, rowClass, values) {
   const row = document.createElement("tr");
   row.className = rowClass;
-  row.append(createInputCell("number", "month-input", values.month, { min: "0", step: "1" }));
+  if (rowClass === "extra-row" || rowClass === "rate-row") {
+    row.append(createInputCell("month", "month-input", values.monthInput || getLoanMonthInputValue(values.month || 1)));
+  } else {
+    row.append(createInputCell("number", "month-input", values.month, { min: "0", step: "1" }));
+  }
 
   if (rowClass === "rate-row") {
     row.append(createInputCell("number", "rate-input", values.rate, { min: "0", step: "0.01" }));
@@ -403,15 +424,21 @@ function addTableRow(body, rowClass, values) {
       );
       row.append(
         createSelectCell("frequency-input", values.frequency || "once", [
-          { value: "once", label: "One-time" },
-          { value: "monthly", label: "Every month" },
-          { value: "range", label: "From A to B" },
-          { value: "count", label: "For N months" },
+          { value: "once", label: "Single time" },
+          { value: "monthly", label: "Each month" },
+          { value: "alternate", label: "Alternate month" },
         ]),
       );
-      row.append(createInputCell("number", "end-month-input", values.endMonth || "", { min: "1", step: "1", placeholder: "B month" }));
+      row.append(createInputCell("month", "end-month-input", values.endMonthInput || (values.endMonth ? getLoanMonthInputValue(values.endMonth) : "")));
       row.append(createInputCell("number", "count-input", values.count || "", { min: "1", step: "1", placeholder: "N" }));
-      row.append(createInputCell("number", "day-input", values.day || elements["emi-day"].value, { min: "1", max: "31", step: "1" }));
+      row.append(
+        createSelectCell("day-mode-input", values.dayMode || getExtraPaymentDayMode(values.day), [
+          { value: "emi", label: "Same as EMI day" },
+          { value: "last", label: "Last day of month" },
+          { value: "specific", label: "Specific day" },
+        ]),
+      );
+      row.append(createInputCell("number", "day-input", values.day || "", { min: "1", max: "31", step: "1", placeholder: "Day" }));
     }
   }
 
@@ -496,10 +523,10 @@ function resetForm() {
   elements["property-status"].value = DEFAULTS.propertyStatus;
   elements["moratorium-option"].checked = DEFAULTS.moratorium;
   elements["possession-month"].value = DEFAULTS.possessionMonth;
+  setDefaultStartMonth();
   populateRows(elements["disbursement-body"], "disbursement-row", DEFAULTS.disbursements);
   populateRows(elements["rate-change-body"], "rate-row", DEFAULTS.rateChanges);
   populateRows(elements["extra-payment-body"], "extra-row", DEFAULTS.extraPayments);
-  setDefaultStartMonth();
   toggleConstructionOptions();
   calculateAndRender();
 }
@@ -509,7 +536,7 @@ function readScheduleRows(body, valueKey) {
     .map((row) => {
       const monthInput = row.querySelector(".month-input").value;
       const valueInput = row.querySelector(valueKey === "rate" ? ".rate-input" : ".amount-input").value;
-      const month = parseNumberInput(monthInput);
+      const month = valueKey === "rate" ? getLoanMonthNumberFromInput(monthInput) : parseNumberInput(monthInput);
       const value = parseNumberInput(valueInput);
       return { month, monthInput, [valueKey]: value, [`${valueKey}Input`]: valueInput };
     })
@@ -540,6 +567,15 @@ function readDisbursementRows() {
     .filter((row) => row.month > 0 || row.percentage > 0 || row.percentageInput.trim() !== "");
 }
 
+function getExtraPaymentDayMode(day) {
+  if (day === "last") return "last";
+  return day ? "specific" : "emi";
+}
+
+function normalizeExtraPaymentDayMode(value) {
+  return ["emi", "last", "specific"].includes(value) ? value : "emi";
+}
+
 function readExtraPaymentRows() {
   return [...elements["extra-payment-body"].querySelectorAll("tr")]
     .map((row) => {
@@ -548,17 +584,19 @@ function readExtraPaymentRows() {
       const endMonthInput = row.querySelector(".end-month-input").value;
       const countInput = row.querySelector(".count-input").value;
       const dayInput = row.querySelector(".day-input").value;
+      const dayMode = normalizeExtraPaymentDayMode(row.querySelector(".day-mode-input").value);
       return {
-        month: parseNumberInput(monthInput),
+        month: getLoanMonthNumberFromInput(monthInput),
         monthInput,
         amount: parseNumberInput(amountInput),
         amountInput,
         frequency: row.querySelector(".frequency-input").value,
-        endMonth: parseNumberInput(endMonthInput),
+        endMonth: getLoanMonthNumberFromInput(endMonthInput),
         endMonthInput,
         count: parseNumberInput(countInput),
         countInput,
-        day: parseNumberInput(dayInput),
+        dayMode,
+        day: dayMode === "specific" ? parseNumberInput(dayInput) : 0,
         dayInput,
       };
     })
@@ -637,15 +675,25 @@ function validateDisbursementFunding(rows, agreementValue) {
 }
 
 function validateExtraPaymentSchedules(rows, maximumMonths) {
+  const allowedFrequencies = new Set(["once", "monthly", "alternate"]);
   for (const row of rows) {
-    if (row.day < 1 || row.day > 31) {
-      return "Extra payment day must be between 1 and 31.";
+    if (!allowedFrequencies.has(row.frequency)) {
+      return "Extra payment frequency must be single time, each month, or alternate month.";
     }
-    if (row.frequency === "range" && (row.endMonth < row.month || row.endMonth > maximumMonths)) {
-      return "Extra payment end month must be within the loan duration and not before the start month.";
+    if (row.endMonth && row.endMonth < row.month) {
+      return "Extra payment end month cannot be before the start month.";
     }
-    if (row.frequency === "count" && row.count < 1) {
-      return "Extra payment month count must be at least 1.";
+    if (row.endMonth > maximumMonths) {
+      return "Extra payment end month must be within the loan duration.";
+    }
+    if (row.count < 0 || row.count > maximumMonths) {
+      return "Extra payment month count must be within the loan duration.";
+    }
+    if (row.frequency !== "once" && row.endMonth && row.count) {
+      return "Use either an extra payment end month or an N-month count, not both.";
+    }
+    if (row.dayMode === "specific" && (row.day < 1 || row.day > 31)) {
+      return "Specific extra payment day must be between 1 and 31.";
     }
   }
   return "";
@@ -734,26 +782,30 @@ function validateInputs(values) {
   return "";
 }
 
-function expandExtraPayments(rows, maximumMonths, startMonth) {
+function getExtraPaymentDay(row, emiDay) {
+  if (row.dayMode === "last") return "last";
+  if (row.dayMode === "specific") return row.day;
+  return emiDay;
+}
+
+function expandExtraPayments(rows, maximumMonths, startMonth, emiDay) {
   const payments = [];
 
   rows.forEach((row) => {
-    let finalMonth = row.month;
-    if (row.frequency === "monthly") {
-      finalMonth = maximumMonths;
-    } else if (row.frequency === "range") {
-      finalMonth = row.endMonth;
-    } else if (row.frequency === "count") {
-      finalMonth = row.month + row.count - 1;
-    }
+    const scheduleLength = row.frequency === "once" ? 1 : row.count || maximumMonths;
+    const requestedFinalMonth = row.frequency === "once" ? row.month : row.endMonth || row.month + scheduleLength - 1;
+    const finalMonth = Math.min(requestedFinalMonth, maximumMonths);
+    const monthStep = row.frequency === "alternate" ? 2 : 1;
+    const paymentDay = getExtraPaymentDay(row, emiDay);
 
-    for (let month = row.month; month <= Math.min(finalMonth, maximumMonths); month += 1) {
+    for (let month = row.month; month <= finalMonth; month += monthStep) {
       payments.push({
         month,
         amount: row.amount,
-        day: row.day,
+        day: paymentDay,
+        dayMode: row.dayMode,
         frequency: row.frequency,
-        date: getLoanMonthDate(startMonth, month - 1, row.day),
+        date: getLoanMonthDate(startMonth, month - 1, paymentDay),
       });
     }
   });
@@ -783,9 +835,6 @@ function getPaymentsForMonth(payments, monthNumber) {
   return payments.filter((payment) => payment.month === monthNumber);
 }
 
-function getRecurringPaymentsOnDate(payments, date) {
-  return payments.filter((payment) => payment.frequency !== "once" && payment.date.getTime() === date.getTime());
-}
 
 function roundInterestAmount(amount, useBoundaryDayRounding = false) {
   return useBoundaryDayRounding ? Math.floor(amount) : Math.round(amount);
@@ -806,7 +855,7 @@ function buildSchedule(values) {
   const isConstruction = values.propertyStatus === "construction";
   const disbursements = isConstruction ? expandDisbursements(values.disbursements, values.startMonth, values.agreementValue) : [];
   const sortedRateChanges = [...values.rateChanges].sort((a, b) => a.month - b.month);
-  const extraPayments = expandExtraPayments(values.extraPayments, maximumMonths, values.startMonth);
+  const extraPayments = expandExtraPayments(values.extraPayments, maximumMonths, values.startMonth, values.emiDay);
   const finalDisbursementDate = disbursements.length
     ? disbursements[disbursements.length - 1].date
     : getLoanMonthDate(values.startMonth, 0, values.emiDay);
@@ -856,14 +905,10 @@ function buildSchedule(values) {
     const isMoratorium = isConstruction && values.moratorium && monthNumber < moratoriumEndMonth;
 
     const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, periodEnd);
-    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber)
-      .filter((payment) => !(payment.frequency !== "once" && payment.date.getTime() === periodStart.getTime()));
-    const boundaryRecurringPayments = getRecurringPaymentsOnDate(extraPayments, periodEnd)
-      .filter((payment) => payment.month !== monthNumber);
+    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber);
     const periodEvents = [
       ...periodDisbursements.map((d) => ({ ...d, type: "disbursement" })),
       ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
-      ...boundaryRecurringPayments.map((p) => ({ ...p, type: "prepayment", countInExtra: false })),
     ].sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
     const interestResult = calculateDailyInterestForPeriod(
@@ -871,10 +916,9 @@ function buildSchedule(values) {
       rate,
       periodStart,
       periodEnd,
-      periodEvents,
-      boundaryRecurringPayments.length > 0
+      periodEvents
     );
-    const interest = roundInterestAmount(interestResult.interest, boundaryRecurringPayments.length > 0);
+    const interest = roundInterestAmount(interestResult.interest);
     const extraPaid = interestResult.extraPaid;
     const disbursed = interestResult.disbursed;
     totalDisbursed += interestResult.totalDisbursed;
@@ -1111,7 +1155,7 @@ function initializeCalculator() {
       addTableRow(elements["rate-change-body"], "rate-row", { month: 1, rate: elements["interest-rate"].value });
     });
     elements["add-extra-button"].addEventListener("click", () => {
-      addTableRow(elements["extra-payment-body"], "extra-row", { month: 1, amount: 0 });
+      addTableRow(elements["extra-payment-body"], "extra-row", { month: 1, amount: 0, frequency: "monthly", endMonth: "", count: "", dayMode: "last" });
     });
 
     resetForm();
