@@ -1036,7 +1036,7 @@ function downloadCsv() {
     "Interest",
     "Principal",
     "Extra paid",
-    "Remaining principal",
+    "Remaining principal EOM(end of month)",
   ];
   const rows = latestSchedule.map((row) => [
     dateFormatter.format(row.date),
