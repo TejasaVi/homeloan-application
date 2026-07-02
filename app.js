@@ -240,12 +240,11 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
       const eventDate = getDateOnly(event.date);
       const isSameDayAsBaseline = eventDate.getTime() === baselineDate.getTime();
 
-      // The schedule may carry recurring payments that fall exactly on the next
-      // period boundary into the previous closing balance. One-time payments on
-      // that same boundary date are not part of that closing balance, so include
-      // them here when calculating today's outstanding principal.
+      // The schedule applies one-time EMI-date extras in the completed row,
+      // while recurring boundary payments are applied by the live outstanding
+      // snapshot once that boundary date has arrived.
       return (
-        (eventDate > baselineDate || (isSameDayAsBaseline && event.frequency === "once")) &&
+        (eventDate > baselineDate || (isSameDayAsBaseline && event.frequency !== "once")) &&
         eventDate <= currentDate
       );
     })
@@ -310,17 +309,14 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
     currentDate = addDays(currentDate, 1);
   }
 
-  while (
-    eventIndex < periodEvents.length &&
-    (includePaymentDateInterest ? periodEvents[eventIndex].date <= paymentDate : periodEvents[eventIndex].date < paymentDate)
-  ) {
+  while (eventIndex < periodEvents.length && periodEvents[eventIndex].date <= paymentDate) {
     applyEvent(periodEvents[eventIndex]);
     eventIndex += 1;
   }
 
   if (includePaymentDateInterest) {
-    // Recurring payments that happen on the next EMI date are applied before
-    // the bank accrues that boundary day's interest.
+    // When explicitly requested, accrue one boundary day of interest after any
+    // same-day balance changes have been applied.
     interest += calculateDailyInterest(interestBalance, annualRate, 1);
   }
 
@@ -827,8 +823,12 @@ function expandDisbursements(rows, startMonth, agreementValue) {
     .sort((a, b) => a.date - b.date);
 }
 
-function getPaymentsForPeriod(payments, periodStart, periodEnd) {
-  return payments.filter((payment) => payment.date >= periodStart && payment.date < periodEnd);
+function getPaymentsForPeriod(payments, periodStart, periodEnd, includeEndDate = false) {
+  return payments.filter((payment) => {
+    const isAfterPeriodStart = payment.date > periodStart;
+    const isBeforePeriodEnd = includeEndDate ? payment.date <= periodEnd : payment.date < periodEnd;
+    return isAfterPeriodStart && isBeforePeriodEnd;
+  });
 }
 
 function getPaymentsForMonth(payments, monthNumber) {
@@ -885,9 +885,9 @@ function buildSchedule(values) {
     (balance > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 2, values.emiDay) < finalDisbursementDate);
     monthNumber += 1
   ) {
-    const date = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
     const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
-    const periodEnd = getLoanMonthDate(values.startMonth, monthNumber, values.emiDay);
+    const date = getLoanMonthDate(values.startMonth, monthNumber, values.emiDay);
+    const periodEnd = date;
     const rate = getRateForMonth(values.interestRate, sortedRateChanges, monthNumber);
 
     // Recompute fixed EMI only when the rate has just changed this month
@@ -905,7 +905,7 @@ function buildSchedule(values) {
     const isMoratorium = isConstruction && values.moratorium && monthNumber < moratoriumEndMonth;
 
     const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, periodEnd);
-    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber);
+    const periodPayments = getPaymentsForPeriod(extraPayments, periodStart, periodEnd, true);
     const periodEvents = [
       ...periodDisbursements.map((d) => ({ ...d, type: "disbursement" })),
       ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
