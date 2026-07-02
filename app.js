@@ -284,14 +284,11 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
     }
   });
 
-  const currentRate = nextRow?.rate ?? previousRow?.rate ?? values.interestRate;
-  const monthEndDate = getLastDateOfCalendarMonth(currentDate);
-  const estimatedInterestDays = getInclusiveDayCount(currentDate, monthEndDate);
-  const estimatedInterest = calculateDailyInterest(outstandingPrincipal, currentRate, estimatedInterestDays);
+  const currentMonthInterest = nextRow ? nextRow.interest : 0;
 
   return {
     currentOutstandingPrincipal: Math.max(outstandingPrincipal, 0),
-    currentMonthEstimatedInterest: roundInterestAmount(estimatedInterest),
+    currentMonthEstimatedInterest: roundInterestAmount(currentMonthInterest),
     currentOutstandingDate: currentDate,
   };
 }
@@ -1199,7 +1196,7 @@ function renderSummary(result) {
     ["Own contribution", `${formatCurrency(result.ownContribution)} (${formatPercent(result.ownContributionPercentage)})`],
     ["Total disbursed", formatCurrency(result.totalDisbursed)],
     [`Current statement outstanding (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentOutstandingPrincipal)],
-    [`Estimated remaining month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
+    [`Estimated current month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
     ["Starting EMI", formatCurrency(result.firstEmi)],
     ["Total interest", formatCurrency(result.totalInterest)],
     ["Moratorium interest", formatCurrency(result.moratoriumInterest)],
