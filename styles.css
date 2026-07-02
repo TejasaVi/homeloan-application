@@ -302,6 +302,12 @@ th {
   text-transform: uppercase;
 }
 
+.wrapped-heading {
+  max-width: 132px;
+  white-space: normal;
+  line-height: 1.35;
+}
+
 tbody tr:hover {
   background: #f8fbff;
 }
