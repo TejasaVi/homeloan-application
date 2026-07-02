@@ -170,7 +170,7 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
   let disbursed = 0;
   let totalDisbursed = 0;
   let eventIndex = 0;
-  let currentDate = new Date(periodStart);
+  let currentDate = addDays(periodStart, 1);
 
   function applyEvent(event) {
     if (event.type === "disbursement") {
@@ -186,9 +186,8 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
     }
   }
 
-  // Accrue interest for each day in the half-open EMI period [periodStart, paymentDate).
-  // Events dated on the period start apply before that day accrues interest, while
-  // events dated on the next EMI date are handled by the following schedule row.
+  // Accrue interest for completed days only. The payment/EMI date itself should
+  // update the balance, but it should not add another day of interest.
   while (currentDate < paymentDate) {
     while (eventIndex < periodEvents.length && periodEvents[eventIndex].date <= currentDate) {
       applyEvent(periodEvents[eventIndex]);
@@ -199,7 +198,10 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
     currentDate = addDays(currentDate, 1);
   }
 
-  while (eventIndex < periodEvents.length && periodEvents[eventIndex].date < paymentDate) {
+  while (
+    eventIndex < periodEvents.length &&
+    (includePaymentDateInterest ? periodEvents[eventIndex].date <= paymentDate : periodEvents[eventIndex].date < paymentDate)
+  ) {
     applyEvent(periodEvents[eventIndex]);
     eventIndex += 1;
   }
@@ -760,13 +762,23 @@ function buildSchedule(values) {
 
     const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, periodEnd);
     const periodPayments = getPaymentsForMonth(extraPayments, monthNumber);
+    const boundaryRecurringPayments = getRecurringPaymentsOnDate(extraPayments, periodEnd)
+      .filter((payment) => payment.month !== monthNumber);
     const periodEvents = [
       ...periodDisbursements.map((d) => ({ ...d, type: "disbursement" })),
       ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
+      ...boundaryRecurringPayments.map((p) => ({ ...p, type: "prepayment", countInExtra: false })),
     ].sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
-    const interestResult = calculateDailyInterestForPeriod(balance, rate, periodStart, periodEnd, periodEvents);
-    const interest = roundInterestAmount(interestResult.interest);
+    const interestResult = calculateDailyInterestForPeriod(
+      balance,
+      rate,
+      periodStart,
+      periodEnd,
+      periodEvents,
+      boundaryRecurringPayments.length > 0
+    );
+    const interest = roundInterestAmount(interestResult.interest, boundaryRecurringPayments.length > 0);
     const extraPaid = interestResult.extraPaid;
     const disbursed = interestResult.disbursed;
     totalDisbursed += interestResult.totalDisbursed;
