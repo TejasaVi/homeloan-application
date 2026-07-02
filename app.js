@@ -413,6 +413,20 @@ function getExtraPaymentDateInputValue(values) {
   return formatDateInputValue(getLoanMonthDate(elements["start-month"].value || DEFAULTS.startMonth, month - 1, day));
 }
 
+function getExtraPaymentDateInputType(dayMode) {
+  return dayMode === "specific" ? "date" : "month";
+}
+
+function getExtraPaymentDateInputDisplayValue(value, dayMode) {
+  const fallbackMonth = elements["start-month"]?.value || DEFAULTS.startMonth;
+  const normalizedValue = value || fallbackMonth;
+  return getExtraPaymentDateInputType(dayMode) === "month"
+    ? normalizedValue.slice(0, 7)
+    : normalizedValue.length === 7
+      ? `${normalizedValue}-01`
+      : normalizedValue;
+}
+
 function addTableRow(body, rowClass, values) {
   const row = document.createElement("tr");
   row.className = rowClass;
@@ -447,7 +461,13 @@ function addTableRow(body, rowClass, values) {
           { value: "specific", label: "Specific date" },
         ]),
       );
-      row.append(createInputCell("date", "payment-date-input", paymentDate, { disabled: dayMode !== "specific" }));
+      row.append(
+        createInputCell(
+          getExtraPaymentDateInputType(dayMode),
+          "payment-date-input",
+          getExtraPaymentDateInputDisplayValue(paymentDate, dayMode),
+        ),
+      );
       row.append(
         createInputCell("text", "amount-input", values.amount, { inputMode: "numeric" }),
       );
@@ -534,7 +554,10 @@ function updateExtraPaymentRowControls(row) {
   const frequencyInput = row.querySelector(".frequency-input");
   if (!dayModeInput || !paymentDateInput || !frequencyInput) return;
 
-  paymentDateInput.disabled = dayModeInput.value !== "specific";
+  const paymentDateValue = paymentDateInput.value;
+  paymentDateInput.type = getExtraPaymentDateInputType(dayModeInput.value);
+  paymentDateInput.value = getExtraPaymentDateInputDisplayValue(paymentDateValue, dayModeInput.value);
+  paymentDateInput.disabled = false;
 
   const showRecurringFields = frequencyInput.value !== "once";
   row.querySelectorAll(".recurring-cell").forEach((cell) => {
