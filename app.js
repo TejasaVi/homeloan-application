@@ -35,7 +35,7 @@ const DEFAULTS = {
   ],
   rateChanges: [],
   extraPayments: [
-    { month: 3, amount: 105275, frequency: "monthly", count: "", dayMode: "last", day: "" },
+    { month: 2, amount: 105275, frequency: "monthly", count: "", dayMode: "last", day: "" },
     { month: 2, amount: 325, frequency: "once", count: "", dayMode: "emi", day: "" },
     { month: 2, amount: 16, frequency: "once", count: "", dayMode: "specific", day: 27 },
     { month: 3, amount: 149277, frequency: "once", count: "", dayMode: "emi", day: "" },
