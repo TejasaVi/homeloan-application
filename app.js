@@ -163,7 +163,7 @@ function calculateDailyInterest(principal, annualRate, days) {
   return principal * (annualRate / 100) * (days / 365);
 }
 
-function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart, paymentDate, periodEvents) {
+function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart, paymentDate, periodEvents, includePaymentDateInterest = false) {
   let interest = 0;
   let interestBalance = openingBalance;
   let extraPaid = 0;
@@ -180,7 +180,9 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
     } else {
       const paymentAmount = Math.min(event.amount, interestBalance);
       interestBalance = Math.max(interestBalance - paymentAmount, 0);
-      extraPaid += paymentAmount;
+      if (event.countInExtra !== false) {
+        extraPaid += paymentAmount;
+      }
     }
   }
 
@@ -199,6 +201,12 @@ function calculateDailyInterestForPeriod(openingBalance, annualRate, periodStart
   while (eventIndex < periodEvents.length && periodEvents[eventIndex].date <= paymentDate) {
     applyEvent(periodEvents[eventIndex]);
     eventIndex += 1;
+  }
+
+  if (includePaymentDateInterest) {
+    // Recurring payments that happen on the next EMI date are applied before
+    // the bank accrues that boundary day's interest.
+    interest += calculateDailyInterest(interestBalance, annualRate, 1);
   }
 
   return {
@@ -646,6 +654,7 @@ function expandExtraPayments(rows, maximumMonths, startMonth) {
         month,
         amount: row.amount,
         day: row.day,
+        frequency: row.frequency,
         date: getLoanMonthDate(startMonth, month - 1, row.day),
       });
     }
@@ -670,6 +679,18 @@ function expandDisbursements(rows, startMonth, agreementValue) {
 
 function getPaymentsForPeriod(payments, periodStart, periodEnd) {
   return payments.filter((payment) => payment.date > periodStart && payment.date <= periodEnd);
+}
+
+function getPaymentsForMonth(payments, monthNumber) {
+  return payments.filter((payment) => payment.month === monthNumber);
+}
+
+function getRecurringPaymentsOnDate(payments, date) {
+  return payments.filter((payment) => payment.frequency !== "once" && payment.date.getTime() === date.getTime());
+}
+
+function roundInterestAmount(amount, useBoundaryDayRounding = false) {
+  return useBoundaryDayRounding ? Math.floor(amount) : Math.round(amount);
 }
 
 function getRateForMonth(baseRate, rateChanges, monthNumber) {
@@ -718,7 +739,8 @@ function buildSchedule(values) {
     monthNumber += 1
   ) {
     const date = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
-    const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 2, values.emiDay);
+    const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
+    const periodEnd = getLoanMonthDate(values.startMonth, monthNumber, values.emiDay);
     const rate = getRateForMonth(values.interestRate, sortedRateChanges, monthNumber);
 
     // Recompute fixed EMI only when the rate has just changed this month
@@ -735,15 +757,25 @@ function buildSchedule(values) {
     const openingBalance = balance;
     const isMoratorium = isConstruction && values.moratorium && monthNumber < moratoriumEndMonth;
 
-    const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, date);
-    const periodPayments = getPaymentsForPeriod(extraPayments, periodStart, date);
+    const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, periodEnd);
+    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber);
+    const boundaryRecurringPayments = getRecurringPaymentsOnDate(extraPayments, periodEnd)
+      .filter((payment) => payment.month !== monthNumber);
     const periodEvents = [
       ...periodDisbursements.map((d) => ({ ...d, type: "disbursement" })),
       ...periodPayments.map((p) => ({ ...p, type: "prepayment" })),
+      ...boundaryRecurringPayments.map((p) => ({ ...p, type: "prepayment", countInExtra: false })),
     ].sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
 
-    const interestResult = calculateDailyInterestForPeriod(balance, rate, periodStart, date, periodEvents);
-    const interest = interestResult.interest;
+    const interestResult = calculateDailyInterestForPeriod(
+      balance,
+      rate,
+      periodStart,
+      periodEnd,
+      periodEvents,
+      boundaryRecurringPayments.length > 0
+    );
+    const interest = roundInterestAmount(interestResult.interest, boundaryRecurringPayments.length > 0);
     const extraPaid = interestResult.extraPaid;
     const disbursed = interestResult.disbursed;
     totalDisbursed += interestResult.totalDisbursed;
