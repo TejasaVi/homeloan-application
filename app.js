@@ -11,8 +11,8 @@ const DEFAULTS = {
   possessionMonth: 1,
   disbursements: [
     { month: 1, percentage: 30, bankContribution: 2479989, ownContribution: 2364200, day: 31 },
-    ...[15, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5].map((percentage, index) => ({
-      month: index + 2,
+    ...[15, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5].map((percentage, index) => ({
+      month: index + 3,
       percentage,
       bankContribution: "",
       ownContribution: 0,
@@ -20,7 +20,13 @@ const DEFAULTS = {
     })),
   ],
   rateChanges: [],
-  extraPayments: [{ month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 }],
+  extraPayments: [
+    { month: 3, amount: 105275, frequency: "monthly", endMonth: "", count: "", day: 1 },
+    { month: 2, amount: 325, frequency: "once", endMonth: "", count: "", day: 1 },
+    { month: 2, amount: 16, frequency: "once", endMonth: "", count: "", day: 27 },
+    { month: 3, amount: 149277, frequency: "once", endMonth: "", count: "", day: 1 },
+    { month: 3, amount: 630000, frequency: "once", endMonth: "", count: "", day: 2 },
+  ],
 };
 
 const elementIds = [
