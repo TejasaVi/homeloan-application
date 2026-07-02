@@ -159,6 +159,67 @@ function addDays(date, daysToAdd) {
   return nextDate;
 }
 
+function getDateOnly(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, today = new Date()) {
+  const currentDate = getDateOnly(today);
+  let previousRowIndex = -1;
+  rows.forEach((row, index) => {
+    if (getDateOnly(row.date) < currentDate) {
+      previousRowIndex = index;
+    }
+  });
+  const previousRow = previousRowIndex >= 0 ? rows[previousRowIndex] : null;
+  const nextRow = previousRowIndex + 1 < rows.length ? rows[previousRowIndex + 1] : null;
+  const baselineDate = previousRow
+    ? getDateOnly(previousRow.date)
+    : addDays(getLoanMonthDate(values.startMonth, 0, values.emiDay), -1);
+  let outstandingPrincipal = previousRow
+    ? previousRow.closingBalance
+    : values.propertyStatus === "construction"
+      ? 0
+      : values.loanAmount;
+
+  const currentEvents = [
+    ...disbursements.map((disbursement) => ({ ...disbursement, type: "disbursement" })),
+    ...extraPayments.map((payment) => ({ ...payment, type: "prepayment" })),
+  ]
+    .filter((event) => {
+      const eventDate = getDateOnly(event.date);
+      return eventDate > baselineDate && eventDate < currentDate;
+    })
+    .sort((a, b) => a.date - b.date || (a.type === "disbursement" ? -1 : 1));
+
+  currentEvents.forEach((event) => {
+    if (event.type === "disbursement") {
+      outstandingPrincipal += event.amount;
+    } else {
+      outstandingPrincipal = Math.max(outstandingPrincipal - event.amount, 0);
+    }
+  });
+
+  const currentRate = nextRow?.rate ?? previousRow?.rate ?? values.interestRate;
+  const interestResult = calculateDailyInterestForPeriod(
+    previousRow
+      ? previousRow.closingBalance
+      : values.propertyStatus === "construction"
+        ? 0
+        : values.loanAmount,
+    currentRate,
+    baselineDate,
+    currentDate,
+    currentEvents,
+  );
+
+  return {
+    currentOutstandingPrincipal: Math.max(outstandingPrincipal, 0),
+    currentMonthEstimatedInterest: roundInterestAmount(interestResult.interest),
+    currentOutstandingDate: currentDate,
+  };
+}
+
 function calculateDailyInterest(principal, annualRate, days) {
   return principal * (annualRate / 100) * (days / 365);
 }
@@ -830,6 +891,8 @@ function buildSchedule(values) {
     });
   }
 
+  const currentLoanSnapshot = getCurrentLoanSnapshot(values, rows, disbursements, extraPayments);
+
   return {
     agreementValue: values.agreementValue,
     loanAmount: values.loanAmount,
@@ -853,6 +916,7 @@ function buildSchedule(values) {
     totalExtra,
     moratoriumInterest,
     totalPaid: totalInterest + totalPrincipal + totalExtra,
+    ...currentLoanSnapshot,
     payoffDate: rows.length ? rows[rows.length - 1].date : addMonths(values.startMonth, 0),
     monthsSaved: maximumMonths - rows.length,
   };
@@ -865,6 +929,8 @@ function renderSummary(result) {
     ["Bank eligibility cap", `${formatCurrency(result.eligibleLoanAmount)} (${formatPercent(result.eligibilityPercentage)})`],
     ["Own contribution", `${formatCurrency(result.ownContribution)} (${formatPercent(result.ownContributionPercentage)})`],
     ["Total disbursed", formatCurrency(result.totalDisbursed)],
+    [`Current outstanding principal (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentOutstandingPrincipal)],
+    [`Estimated current month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
     ["Starting EMI", formatCurrency(result.firstEmi)],
     ["Total interest", formatCurrency(result.totalInterest)],
     ["Moratorium interest", formatCurrency(result.moratoriumInterest)],
