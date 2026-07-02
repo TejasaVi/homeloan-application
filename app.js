@@ -210,6 +210,9 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
       : values.propertyStatus === "construction"
         ? 0
         : values.loanAmount;
+  // This is principal-only. Interest accrued since the last EMI boundary is
+  // shown separately as an estimate and is not added back into outstanding
+  // principal, so we do not calculate interest on interest.
   let outstandingPrincipal = baselinePrincipal;
 
   const currentEvents = [
@@ -853,7 +856,8 @@ function buildSchedule(values) {
     const isMoratorium = isConstruction && values.moratorium && monthNumber < moratoriumEndMonth;
 
     const periodDisbursements = getPaymentsForPeriod(disbursements, periodStart, periodEnd);
-    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber);
+    const periodPayments = getPaymentsForMonth(extraPayments, monthNumber)
+      .filter((payment) => !(payment.frequency !== "once" && payment.date.getTime() === periodStart.getTime()));
     const boundaryRecurringPayments = getRecurringPaymentsOnDate(extraPayments, periodEnd)
       .filter((payment) => payment.month !== monthNumber);
     const periodEvents = [
@@ -963,7 +967,7 @@ function renderSummary(result) {
     ["Own contribution", `${formatCurrency(result.ownContribution)} (${formatPercent(result.ownContributionPercentage)})`],
     ["Total disbursed", formatCurrency(result.totalDisbursed)],
     [`Current outstanding principal (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentOutstandingPrincipal)],
-    [`Estimated current month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
+    [`Estimated remaining month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
     ["Starting EMI", formatCurrency(result.firstEmi)],
     ["Total interest", formatCurrency(result.totalInterest)],
     ["Moratorium interest", formatCurrency(result.moratoriumInterest)],
