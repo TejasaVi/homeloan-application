@@ -34,6 +34,9 @@ const DEFAULTS = {
     })),
   ],
   rateChanges: [],
+  interestDeductions: [
+    { month: 2, amount: 14716 },
+  ],
   extraPayments: [
     { month: 2, amount: 105275, frequency: "monthly", count: "", dayMode: "last", day: "" },
     { month: 2, amount: 325, frequency: "once", count: "", dayMode: "emi", day: "" },
@@ -65,9 +68,11 @@ const elementIds = [
   "disbursement-section",
   "disbursement-body",
   "rate-change-body",
+  "interest-deduction-body",
   "extra-payment-body",
   "add-disbursement-button",
   "add-rate-button",
+  "add-interest-deduction-button",
   "add-extra-button",
 ];
 
@@ -469,6 +474,8 @@ function addTableRow(body, rowClass, values) {
 
   if (rowClass === "rate-row") {
     row.append(createInputCell("number", "rate-input", values.rate, { min: "0", step: "0.01" }));
+  } else if (rowClass === "interest-deduction-row") {
+    row.append(createInputCell("text", "amount-input", values.amount, { inputMode: "numeric" }));
   } else {
     if (rowClass === "disbursement-row") {
       row.append(createInputCell("number", "percentage-input", values.percentage, { min: "0", max: "100", step: "0.01" }));
@@ -618,6 +625,7 @@ function resetForm() {
   setDefaultStartMonth();
   populateRows(elements["disbursement-body"], "disbursement-row", DEFAULTS.disbursements);
   populateRows(elements["rate-change-body"], "rate-row", DEFAULTS.rateChanges);
+  populateRows(elements["interest-deduction-body"], "interest-deduction-row", DEFAULTS.interestDeductions);
   populateRows(elements["extra-payment-body"], "extra-row", DEFAULTS.extraPayments);
   toggleConstructionOptions();
   calculateAndRender();
@@ -712,6 +720,7 @@ function readFormValues() {
     possessionMonth: readNumber("possession-month"),
     disbursements: readDisbursementRows(),
     rateChanges: readScheduleRows(elements["rate-change-body"], "rate"),
+    interestDeductions: readScheduleRows(elements["interest-deduction-body"], "amount"),
     extraPayments: readExtraPaymentRows(),
   };
 }
@@ -830,12 +839,18 @@ function validateInputs(values) {
   const rateChangeError = validateMonthRows(values.rateChanges, "Rate change", maximumMonths);
   if (rateChangeError) return rateChangeError;
 
+  const interestDeductionError = validateMonthRows(values.interestDeductions, "Interest deduction", maximumMonths);
+  if (interestDeductionError) return interestDeductionError;
+
   const extraPaymentError = validateMonthRows(values.extraPayments, "Extra payment", maximumMonths);
   if (extraPaymentError) return extraPaymentError;
 
   if (values.rateChanges.some((row) => row.rate < 0)) {
     return "Rate change percentage cannot be negative.";
   }
+
+  const interestDeductionAmountError = validateWholeNumberRows(values.interestDeductions, "amount", "Interest deduction");
+  if (interestDeductionAmountError) return interestDeductionAmountError;
 
   const extraPaymentAmountError = validateWholeNumberRows(values.extraPayments, "amount", "Extra payment");
   if (extraPaymentAmountError) return extraPaymentAmountError;
@@ -1000,18 +1015,19 @@ function buildSchedule(values) {
   const isConstruction = values.propertyStatus === "construction";
   const disbursements = isConstruction ? expandDisbursements(values.disbursements, values.startMonth, values.agreementValue) : [];
   const sortedRateChanges = [...values.rateChanges].sort((a, b) => a.month - b.month);
+  const postedInterestByMonth = new Map(values.interestDeductions.map((row) => [row.month, row.amount]));
   const extraPayments = expandExtraPayments(values.extraPayments, maximumMonths, values.startMonth, values.emiDay);
   const finalDisbursementDate = disbursements.length
     ? disbursements[disbursements.length - 1].date
     : getLoanMonthDate(values.startMonth, 0, values.emiDay);
   const moratoriumEndMonth = isConstruction && values.moratorium ? values.possessionMonth : 1;
 
-  // --- FIX: compute a fixed EMI once per rate segment ---
-  // We track the "current EMI" and only recompute it when the interest rate changes.
+  // Compute a rounded fixed EMI once per rate segment. The rounded value is
+  // used for balance calculations so the schedule matches bank statements.
   // The EMI is always based on the ORIGINAL full loan amount and ORIGINAL full tenure,
   // so it stays constant within each rate segment.
   let currentRate = values.interestRate;
-  let currentEmi = calculateMonthlyPayment(values.loanAmount, currentRate, maximumMonths);
+  let currentEmi = roundCurrencyAmount(calculateMonthlyPayment(values.loanAmount, currentRate, maximumMonths));
   // Build a quick lookup: which months trigger a rate change?
   const rateChangeMonths = new Set(sortedRateChanges.map((c) => c.month));
 
@@ -1042,7 +1058,7 @@ function buildSchedule(values) {
         currentRate = newRate;
         // Rebase EMI on current outstanding balance and remaining months at the new rate
         const remainingMonths = maximumMonths - monthNumber + 1;
-        currentEmi = calculateMonthlyPayment(balance, currentRate, remainingMonths);
+        currentEmi = roundCurrencyAmount(calculateMonthlyPayment(balance, currentRate, remainingMonths));
       }
     }
 
@@ -1074,27 +1090,20 @@ function buildSchedule(values) {
       emi = interest;
       moratoriumInterest += interest;
     } else {
-      // Normal EMI month: use the fixed EMI, derive principal from daily interest.
-      // EMI principal is applied on the EMI date itself, before that day's
-      // interest, so same-month interest is reduced from the payment day onward.
+      // Normal EMI month: apply the rounded EMI as a statement credit on the
+      // EMI date, then add the calculated or bank-posted interest debit at
+      // month end. This mirrors the loan-account ledger shown by the bank.
       const emiDate = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
       const balanceOnEmiDate = getBalanceAfterEventsThroughDate(balance, balanceEvents, emiDate);
 
       if (balanceOnEmiDate > 0.01) {
-        emi = currentEmi;
-        const dailyRate = rate / 100 / 365;
-        const emiInterestDays = getRemainingDaysInMonth(emiDate, periodEnd);
-        const emiInterestFactor = dailyRate * emiInterestDays;
-        const estimatedInterest = Math.max(
-          (baseInterestResult.interest - emiInterestFactor * emi) / Math.max(1 - emiInterestFactor, Number.EPSILON),
-          0
-        );
-        principalComponent = Math.max(emi - roundInterestAmount(estimatedInterest), 0);
+        emi = Math.min(currentEmi, balanceOnEmiDate);
+        principalComponent = emi;
 
         const eventsWithEmi = [
           ...balanceEvents,
           {
-            amount: principalComponent,
+            amount: emi,
             countInExtra: false,
             date: emiDate,
             type: "prepayment",
@@ -1108,15 +1117,22 @@ function buildSchedule(values) {
           periodEnd,
           eventsWithEmi
         );
-        interest = roundInterestAmount(interestResult.interest);
-
-        emi = Math.min(currentEmi, interestResult.balance + interest);
-        principalComponent = Math.max(emi - interest, 0);
+        interest = postedInterestByMonth.has(monthNumber)
+          ? postedInterestByMonth.get(monthNumber)
+          : roundInterestAmount(interestResult.interest);
 
         if (!firstEmi && emi > 0) {
           firstEmi = emi;
         }
       }
+
+      interest = postedInterestByMonth.has(monthNumber)
+        ? postedInterestByMonth.get(monthNumber)
+        : interest;
+      interestResult = {
+        ...interestResult,
+        balance: interestResult.balance + interest,
+      };
     }
 
     const extraPaid = interestResult.extraPaid;
@@ -1182,7 +1198,7 @@ function renderSummary(result) {
     ["Bank eligibility cap", `${formatCurrency(result.eligibleLoanAmount)} (${formatPercent(result.eligibilityPercentage)})`],
     ["Own contribution", `${formatCurrency(result.ownContribution)} (${formatPercent(result.ownContributionPercentage)})`],
     ["Total disbursed", formatCurrency(result.totalDisbursed)],
-    [`Current outstanding principal (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentOutstandingPrincipal)],
+    [`Current statement outstanding (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentOutstandingPrincipal)],
     [`Estimated remaining month interest (${dateFormatter.format(result.currentOutstandingDate)})`, formatCurrency(result.currentMonthEstimatedInterest)],
     ["Starting EMI", formatCurrency(result.firstEmi)],
     ["Total interest", formatCurrency(result.totalInterest)],
@@ -1251,12 +1267,12 @@ function downloadCsv() {
     "Status",
     "Rate",
     "Disbursed",
-    "Opening principal",
+    "Opening outstanding",
     "EMI / Interest-only",
     "Interest",
-    "Principal",
+    "EMI credit",
     "Extra paid",
-    "Remaining principal End of Month",
+    "Statement outstanding End of Month",
   ];
   const rows = latestSchedule.map((row) => [
     dateFormatter.format(row.date),
@@ -1331,6 +1347,9 @@ function initializeCalculator() {
     });
     elements["add-rate-button"].addEventListener("click", () => {
       addTableRow(elements["rate-change-body"], "rate-row", { month: 1, rate: elements["interest-rate"].value });
+    });
+    elements["add-interest-deduction-button"].addEventListener("click", () => {
+      addTableRow(elements["interest-deduction-body"], "interest-deduction-row", { month: 1, amount: 0 });
     });
     elements["add-extra-button"].addEventListener("click", () => {
       addTableRow(elements["extra-payment-body"], "extra-row", { month: 1, amount: 0, frequency: "once", endMonth: "", count: "", dayMode: "emi" });

@@ -124,6 +124,29 @@
             </div>
           </div>
 
+
+          <div class="input-section">
+            <div class="section-title-row">
+              <div>
+                <h3>Posted interest deductions</h3>
+                <p>Optional bank-posted monthly interest debits. When present, these amounts are added to the statement outstanding for that month.</p>
+              </div>
+              <button type="button" class="secondary small-button" id="add-interest-deduction-button">Add interest deduction</button>
+            </div>
+            <div class="table-wrap compact-wrap">
+              <table class="input-table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Interest amount (₹)</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="interest-deduction-body"></tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="input-section">
             <div class="section-title-row">
               <div>
@@ -170,7 +193,7 @@
         <div class="panel-heading schedule-heading">
           <div>
             <h2 id="schedule-title">Amortization sheet</h2>
-            <p>Month-by-month EMI or moratorium interest, interest component, principal component, extra payment, and balance.</p>
+            <p>Month-by-month EMI or moratorium interest, posted interest debit, EMI credit, extra payment, and statement balance.</p>
           </div>
           <button type="button" class="secondary" id="download-button">Download CSV</button>
         </div>
@@ -182,12 +205,12 @@
                 <th>Status</th>
                 <th>Rate</th>
                 <th>Disbursed</th>
-                <th>Opening principal</th>
+                <th>Opening outstanding</th>
                 <th>EMI / Interest-only</th>
                 <th>Interest</th>
-                <th>Principal</th>
+                <th>EMI credit</th>
                 <th>Extra paid</th>
-                <th class="wrapped-heading">Remaining principal End of Month</th>
+                <th class="wrapped-heading">Statement outstanding End of Month</th>
               </tr>
             </thead>
             <tbody id="schedule-body"></tbody>
