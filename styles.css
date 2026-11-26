@@ -169,6 +169,13 @@ select:focus {
   margin-bottom: 14px;
 }
 
+.section-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .section-title-row p {
   margin-bottom: 0;
 }
@@ -293,6 +300,12 @@ td {
 th:first-child,
 td:first-child {
   text-align: left;
+}
+
+td.rate-cell {
+  max-width: 220px;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 th {

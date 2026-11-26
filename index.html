@@ -26,7 +26,7 @@
         <form id="loan-form" class="panel form-panel" novalidate>
           <div class="panel-heading">
             <h2>Loan details</h2>
-            <p>Enter the loan terms and select Calculate to refresh the amortization sheet.</p>
+            <p>The amortization sheet updates automatically as you change the inputs.</p>
           </div>
 
           <div class="field-grid">
@@ -80,9 +80,12 @@
               <div>
                 <h3>Disbursement plan</h3>
               </div>
-              <button type="button" class="secondary small-button" id="add-disbursement-button">Add disbursement</button>
+              <div class="section-actions">
+                <button type="button" class="secondary small-button toggle-table-button" data-collapse-target="disbursement-table-wrap" aria-expanded="true">Collapse</button>
+                <button type="button" class="secondary small-button" id="add-disbursement-button">Add disbursement</button>
+              </div>
             </div>
-            <div class="table-wrap compact-wrap">
+            <div id="disbursement-table-wrap" class="table-wrap compact-wrap">
               <table class="input-table">
                 <thead>
                   <tr>
@@ -91,9 +94,12 @@
                     <th>Base value</th>
                     <th>GST (5%)</th>
                     <th>Disbursement value</th>
-                    <th>Bank contribution</th>
+                    <th>Bank contribution total</th>
+                    <th>Builder credit</th>
+                    <th>GST credit</th>
+                    <th>GST credit day</th>
                     <th>Own contribution</th>
-                    <th>Disbursement day</th>
+                    <th>Builder credit day</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -106,15 +112,18 @@
             <div class="section-title-row">
               <div>
                 <h3>Interest rate changes</h3>
-                <p>Optional rate changes during the loan tenure. Month 1 uses the borrowing rate above.</p>
+                <p>Optional rate changes take effect on the selected date. The borrowing rate above applies before the first change.</p>
               </div>
-              <button type="button" class="secondary small-button" id="add-rate-button">Add rate change</button>
+              <div class="section-actions">
+                <button type="button" class="secondary small-button toggle-table-button" data-collapse-target="rate-change-table-wrap" aria-expanded="true">Collapse</button>
+                <button type="button" class="secondary small-button" id="add-rate-button">Add rate change</button>
+              </div>
             </div>
-            <div class="table-wrap compact-wrap">
+            <div id="rate-change-table-wrap" class="table-wrap compact-wrap">
               <table class="input-table">
                 <thead>
                   <tr>
-                    <th>From month</th>
+                    <th>Effective date</th>
                     <th>New rate (%)</th>
                     <th>Action</th>
                   </tr>
@@ -131,9 +140,12 @@
                 <h3>Posted interest deductions</h3>
                 <p>Optional bank-posted monthly interest debits. When present, these amounts are added to the statement outstanding for that month.</p>
               </div>
-              <button type="button" class="secondary small-button" id="add-interest-deduction-button">Add interest deduction</button>
+              <div class="section-actions">
+                <button type="button" class="secondary small-button toggle-table-button" data-collapse-target="interest-deduction-table-wrap" aria-expanded="true">Collapse</button>
+                <button type="button" class="secondary small-button" id="add-interest-deduction-button">Add interest deduction</button>
+              </div>
             </div>
-            <div class="table-wrap compact-wrap">
+            <div id="interest-deduction-table-wrap" class="table-wrap compact-wrap">
               <table class="input-table">
                 <thead>
                   <tr>
@@ -153,9 +165,12 @@
                 <h3>Extra payments</h3>
                 <p>Add one-time or recurring prepayments, including payments made outside the EMI date.</p>
               </div>
-              <button type="button" class="secondary small-button" id="add-extra-button">Add extra payment</button>
+              <div class="section-actions">
+                <button type="button" class="secondary small-button toggle-table-button" data-collapse-target="extra-payment-table-wrap" aria-expanded="true">Collapse</button>
+                <button type="button" class="secondary small-button" id="add-extra-button">Add extra payment</button>
+              </div>
             </div>
-            <div class="table-wrap compact-wrap">
+            <div id="extra-payment-table-wrap" class="table-wrap compact-wrap">
               <table class="input-table">
                 <thead>
                   <tr>
@@ -174,7 +189,6 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit">Calculate</button>
             <button type="button" class="secondary" id="reset-button">Reset</button>
           </div>
           <p id="form-error" class="error-message" role="alert" hidden></p>
@@ -193,7 +207,7 @@
         <div class="panel-heading schedule-heading">
           <div>
             <h2 id="schedule-title">Amortization sheet</h2>
-            <p>Month-by-month EMI or moratorium interest, posted interest debit, EMI credit, extra payment, and statement balance.</p>
+            <p>Month-by-month EMI or moratorium interest, posted interest debit, principal amount, extra payment, and statement balance.</p>
           </div>
           <button type="button" class="secondary" id="download-button">Download CSV</button>
         </div>
@@ -208,7 +222,7 @@
                 <th>Opening outstanding</th>
                 <th>EMI / Interest-only</th>
                 <th>Interest</th>
-                <th>EMI credit</th>
+                <th>Principal Amt</th>
                 <th>Extra paid</th>
                 <th class="wrapped-heading">Statement outstanding End of Month</th>
               </tr>
