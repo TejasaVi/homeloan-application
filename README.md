@@ -47,6 +47,7 @@ error message from `app.js`.
 - Applies interest rate changes from their selected effective dates, with daily interest split across the old and new rates while keeping the scheduled EMI fixed.
 - Supports separately dated builder and GST disbursement credits.
 - Supports optional bank-posted interest deductions so the outstanding can be reconciled with a loan-account statement.
+- Posts accrued monthly interest to the outstanding at the start of the following month.
 - Supports optional extra monthly payments.
 - Shows total interest, total paid, payoff date, and months saved.
 - Groups the amortization schedule by year.

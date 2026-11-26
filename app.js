@@ -13,18 +13,18 @@ const DEFAULTS = {
     { month: 1, percentage: 30, bankContribution: 2479989, ownContribution: 2364200, day: 31 },
     { month: 5, percentage: 15, bankContribution: 2306757, ownContribution: 0, day: 17, builderAmount: 2306757, gstBankAmount: 115337, gstDay: 30 },
     ...[
-      { month: 8, percentage: 4 },
       { month: 10, percentage: 4 },
       { month: 12, percentage: 4 },
       { month: 14, percentage: 4 },
       { month: 16, percentage: 4 },
       { month: 18, percentage: 4 },
-      { month: 19, percentage: 4 },
       { month: 20, percentage: 4 },
       { month: 21, percentage: 4 },
       { month: 22, percentage: 4 },
-      { month: 23, percentage: 5 },
-      { month: 24, percentage: 5 },
+      { month: 23, percentage: 4 },
+      { month: 24, percentage: 4 },
+      { month: 25, percentage: 5 },
+      { month: 26, percentage: 5 },
     ].map(({ month, percentage }) => ({
       month,
       percentage,
@@ -34,11 +34,7 @@ const DEFAULTS = {
     })),
   ],
   rateChanges: [{ dateInput: "2026-09-15", rate: 7.8 }],
-  interestDeductions: [
-    { month: 2, amount: 14716 },
-    { month: 5, amount: 12486 },
-    { month: 6, amount: 19902 },
-  ],
+  interestDeductions: [],
   extraPayments: [
     { month: 2, amount: 105275, frequency: "monthly", count: "", dayMode: "last", day: "" },
     { month: 2, amount: 325, frequency: "once", count: "", dayMode: "emi", day: "" },
@@ -242,15 +238,15 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
   const previousRow = previousRowIndex >= 0 ? rows[previousRowIndex] : null;
   const activeRow = previousRowIndex + 1 < rows.length ? rows[previousRowIndex + 1] : null;
   const nextRow = activeRow || previousRow;
-  const baselineDate = previousRow
-    ? getDateOnly(previousRow.periodEnd || previousRow.date)
-    : activeRow
-      ? getDateOnly(activeRow.periodStart || activeRow.date)
+  const baselineDate = activeRow
+    ? addDays(getDateOnly(activeRow.periodStart || activeRow.date), -1)
+    : previousRow
+      ? getDateOnly(previousRow.periodEnd || previousRow.date)
       : addDays(getLoanMonthDate(values.startMonth, 0, values.emiDay), -1);
-  const baselinePrincipal = previousRow
-    ? previousRow.closingBalance
-    : activeRow
-      ? activeRow.openingBalance
+  const baselinePrincipal = activeRow
+    ? activeRow.openingBalance
+    : previousRow
+      ? previousRow.closingBalance
       : values.propertyStatus === "construction"
         ? 0
         : values.loanAmount;
@@ -264,12 +260,13 @@ function getCurrentLoanSnapshot(values, rows, disbursements, extraPayments, toda
     : null;
   const activeEmiPrincipalEvent =
     activeRow &&
-    activeRow.principalComponent > 0 &&
+    activeRow.status !== "Moratorium" &&
+    activeRow.emi > 0 &&
     activeEmiDate > baselineDate &&
     activeEmiDate <= currentDate
       ? [
           {
-            amount: activeRow.principalComponent,
+            amount: activeRow.emi,
             countInExtra: false,
             date: activeEmiDate,
             type: "prepayment",
@@ -1151,13 +1148,17 @@ function buildSchedule(values) {
   let totalDisbursed = isConstruction ? 0 : values.loanAmount;
   let moratoriumInterest = 0;
   let firstEmi = 0;
+  let interestToPost = 0;
 
   for (
     let monthNumber = 1;
     monthNumber <= maximumMonths &&
-    (balance > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 1, 1) <= finalDisbursementDate);
+    (balance + interestToPost > 0.01 || getLoanMonthDate(values.startMonth, monthNumber - 1, 1) <= finalDisbursementDate);
     monthNumber += 1
   ) {
+    // SBI posts the prior month's accrued interest at the next monthly rest.
+    balance += interestToPost;
+    interestToPost = 0;
     const periodStart = getLoanMonthDate(values.startMonth, monthNumber - 1, 1);
     const periodEnd = getLastDateOfCalendarMonth(periodStart);
     const date = periodEnd;
@@ -1192,9 +1193,8 @@ function buildSchedule(values) {
       emi = interest;
       moratoriumInterest += interest;
     } else {
-      // Normal EMI month: apply the rounded EMI as a statement credit on the
-      // EMI date, then add the calculated or bank-posted interest debit at
-      // month end. This mirrors the loan-account ledger shown by the bank.
+      // Apply the EMI on its date. Interest accrued in this calendar month is
+      // posted to the outstanding at the start of the following month.
       const emiDate = getLoanMonthDate(values.startMonth, monthNumber - 1, values.emiDay);
       const balanceOnEmiDate = getBalanceAfterEventsThroughDate(balance, balanceEvents, emiDate);
 
@@ -1233,16 +1233,13 @@ function buildSchedule(values) {
         ? postedInterestByMonth.get(monthNumber)
         : interest;
       principalComponent = emi > 0 ? emi - interest : 0;
-      interestResult = {
-        ...interestResult,
-        balance: interestResult.balance + interest,
-      };
     }
 
     const extraPaid = interestResult.extraPaid;
     const disbursed = interestResult.disbursed;
     totalDisbursed += interestResult.totalDisbursed;
     balance = interestResult.balance;
+    interestToPost = interest;
     totalInterest += interest;
     totalPrincipal += principalComponent;
     totalExtra += extraPaid;
