@@ -44,6 +44,8 @@ error message from `app.js`.
 
 - Calculates home loan principal from home price and down payment.
 - Estimates monthly EMI/payment from interest rate and loan term, rounded to whole rupees for statement-style calculations.
+- Applies interest rate changes from their selected effective dates, with daily interest split across the old and new rates while keeping the scheduled EMI fixed.
+- Supports separately dated builder and GST disbursement credits.
 - Supports optional bank-posted interest deductions so the outstanding can be reconciled with a loan-account statement.
 - Supports optional extra monthly payments.
 - Shows total interest, total paid, payoff date, and months saved.
